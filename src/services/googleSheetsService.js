@@ -224,6 +224,8 @@ class GoogleSheetsService {
   // 개별 시트 구조 업데이트
   async updateSheetStructure(sheetName, expectedHeaders) {
     try {
+      console.log(`🔍 ${sheetName} 시트 구조 업데이트 시작...`);
+      
       // 현재 헤더 확인
       const existingData = await this.sheets.spreadsheets.values.get({
         spreadsheetId: this.spreadsheetId,
@@ -231,10 +233,13 @@ class GoogleSheetsService {
       });
 
       const currentHeaders = existingData.data.values?.[0] || [];
+      console.log(`📋 현재 헤더 (${sheetName}):`, currentHeaders);
+      console.log(`📋 예상 헤더 (${sheetName}):`, expectedHeaders);
       
       // 헤더 비교 및 업데이트
       let headerUpdated = false;
       if (JSON.stringify(currentHeaders) !== JSON.stringify(expectedHeaders)) {
+        console.log(`🔧 ${sheetName} 헤더 업데이트 중...`);
         await this.sheets.spreadsheets.values.update({
           spreadsheetId: this.spreadsheetId,
           range: `${sheetName}!A1:${String.fromCharCode(64 + expectedHeaders.length)}1`,
@@ -244,6 +249,9 @@ class GoogleSheetsService {
           },
         });
         headerUpdated = true;
+        console.log(`✅ ${sheetName} 헤더 업데이트 완료`);
+      } else {
+        console.log(`ℹ️ ${sheetName} 헤더는 이미 최신 상태입니다`);
       }
 
       // 레거시 시트 특별 처리
@@ -252,9 +260,16 @@ class GoogleSheetsService {
         return headerUpdated ? '헤더 업데이트 + 드롭다운 재설정' : '드롭다운 재설정';
       }
       
-      // 모든 시트에 범용 드롭다운 적용 (보스정보 포함)
-      const hasDropdown = SHEET_CONFIG.DROPDOWN_COLUMNS[sheetName];
-      if (hasDropdown) {
+      // 참여이력 시트는 드롭다운이 필요 없으므로 제외
+      if (sheetName === SHEET_CONFIG.SHEET_NAMES.PARTICIPATIONS) {
+        console.log(`ℹ️ ${sheetName} 시트는 드롭다운 적용 제외`);
+        return headerUpdated ? '헤더 업데이트됨' : '최신 상태 유지';
+      }
+      
+      // 드롭다운이 필요한 시트만 적용 (보스정보, 계정정보)
+      const dropdownConfig = SHEET_CONFIG.DROPDOWN_COLUMNS[sheetName];
+      if (dropdownConfig && Object.keys(dropdownConfig).length > 0) {
+        console.log(`🔧 ${sheetName} 드롭다운 적용 중...`);
         await this.applyDropdownValidation(sheetName);
         return headerUpdated ? '헤더 업데이트 + 드롭다운 적용' : '드롭다운 적용';
       }
@@ -262,7 +277,7 @@ class GoogleSheetsService {
       return headerUpdated ? '헤더 업데이트됨' : '최신 상태 유지';
     } catch (error) {
       console.error(`❌ ${sheetName} 구조 업데이트 실패:`, error);
-      return '업데이트 실패';
+      return '업데이트 실패: ' + error.message;
     }
   }
 
@@ -309,14 +324,14 @@ class GoogleSheetsService {
         '사용자ID', '디스코드닉네임', '디스코드태그', '캐릭터ID', '캐릭터명', '권한', '계정유형', '가입일시'
       ],
       [SHEET_CONFIG.SHEET_NAMES.PARTICIPATIONS]: [
-        '참여일시', '캐릭터ID', '캐릭터명', '실제참여자ID', '보스명', '획득점수'
+        '참여일시', '캐릭터ID', '캐릭터명', '실제참여자ID', '보스명', '획득점수', '컷타임'
       ],
       
       // 레거시 시트들 (호환성 유지)
       [SHEET_CONFIG.SHEET_NAMES.MEMBERS]: [
         '사용자ID', '닉네임', '총점수', '권한', '가입일시'
       ],
-      [SHEET_CONFIG.SHEET_NAMES.PARTICIPATION]: [
+      [SHEET_CONFIG.SHEET_NAMES.PARTICIPATION_LEGACY_ALIAS]: [
         '참여일시', '사용자ID', '보스명', '획득점수'
       ],
       [SHEET_CONFIG.SHEET_NAMES.MEMBERS_LEGACY]: [
@@ -1405,6 +1420,60 @@ class GoogleSheetsService {
       return await this.updateBoss(bossName, { cutTime });
     } catch (error) {
       console.error('❌ 보스 컷타임 업데이트 실패:', error);
+      throw error;
+    }
+  }
+
+  // 참여 이력 조회
+  async getParticipationHistory() {
+    try {
+      const result = await this.getData(SHEET_CONFIG.SHEET_NAMES.PARTICIPATIONS);
+      return result;
+    } catch (error) {
+      console.error('❌ 참여 이력 조회 실패:', error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  // 참여 기록 추가
+  async addParticipationRecord(participationData) {
+    try {
+      return await this.appendData(SHEET_CONFIG.SHEET_NAMES.PARTICIPATIONS, participationData);
+    } catch (error) {
+      console.error('❌ 참여 기록 추가 실패:', error);
+      throw error;
+    }
+  }
+
+  // 캐릭터 점수 업데이트
+  async updateCharacterScore(characterName, newScore) {
+    try {
+      const result = await this.getData(SHEET_CONFIG.SHEET_NAMES.CHARACTERS);
+      if (!result.success) throw new Error('캐릭터 정보 시트 조회 실패');
+
+      const characterIndex = result.data.findIndex(row => row[0] === characterName);
+      if (characterIndex === -1) throw new Error('존재하지 않는 캐릭터');
+
+      const rowNumber = characterIndex + 2; // 헤더 다음 행부터
+      const currentData = result.data[characterIndex];
+      
+      // 점수만 업데이트 (캐릭터명, 새점수, 생성일시, 현재시간)
+      const updatedRow = [
+        currentData[0], // 캐릭터명
+        newScore,       // 새 점수
+        currentData[2], // 생성일시 유지
+        new Date().toISOString().replace('T', ' ').substring(0, 19) // 수정일시 업데이트
+      ];
+
+      await this.updateData(
+        SHEET_CONFIG.SHEET_NAMES.CHARACTERS,
+        `A${rowNumber}:D${rowNumber}`,
+        [updatedRow]
+      );
+
+      return { success: true };
+    } catch (error) {
+      console.error('❌ 캐릭터 점수 업데이트 실패:', error);
       throw error;
     }
   }

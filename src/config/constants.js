@@ -65,9 +65,9 @@ const SHEET_CONFIG = {
     MEMBERS_LEGACY: '보탐봇-길드원정보_백업',
     PARTICIPATION_LEGACY: '보탐봇-참여이력_백업',
     
-    // 호환성을 위한 별칭 (기존 코드와 호환)
+    // 호환성을 위한 별칭 (기존 코드와 호환) - 레거시용
     MEMBERS: '보탐봇-길드원정보',
-    PARTICIPATION: '보탐봇-참여이력',
+    PARTICIPATION_LEGACY_ALIAS: '보탐봇-참여이력_레거시',
   },
 
   // 시트 생성 시 필요한 기본 시트들 (백업 제외)
@@ -122,6 +122,7 @@ const SHEET_CONFIG = {
       ACTUAL_PARTICIPANT_ID: 3,
       BOSS_NAME: 4,
       EARNED_SCORE: 5,
+      CUT_TIME: 6,
     },
     
     // 레거시 시트들 (호환성)
@@ -171,9 +172,7 @@ const SHEET_CONFIG = {
       5: 'PERMISSIONS',           // 권한  
       6: 'ACCOUNT_TYPES',         // 계정유형
     },
-    '보탐봇-참여이력': {
-      // 동적 참조는 수식으로 처리하므로 드롭다운 불필요
-    },
+    // 참여이력 시트는 드롭다운이 필요 없으므로 제외됨
   },
 };
 

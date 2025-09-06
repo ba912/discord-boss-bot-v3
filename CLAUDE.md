@@ -47,15 +47,16 @@
 │   │   │   └── user/          # 일반 사용자 (!보스, !컷, !보스일정)
 │   │   └── interactions/      # 모달, 버튼 처리
 │   │       ├── modals/        # 복잡한 데이터 입력용
-│   │       └── buttons/       # 참여 버튼 등
+│   │       └── buttons/       # 컷, 참여, 참여자확인 버튼
 │   ├── handlers/
 │   │   ├── messageHandler.js  # !명령어 파싱 및 라우팅
 │   │   └── interactionHandler.js  # 모달/버튼 라우팅
 │   ├── services/              # 비즈니스 로직
 │   │   ├── bossService.js     # 보스 데이터 관리
-│   │   ├── participationService.js  # 참여도 관리
-│   │   ├── ttsService.js      # 음성 알림
-│   │   └── googleSheetsService.js   # 데이터 저장
+│   │   ├── bossScheduleService.js # 보스 스케줄 계산
+│   │   ├── schedulerService.js # 자동 알림 스케줄러
+│   │   ├── characterService.js # 캐릭터 데이터 관리
+│   │   └── googleSheetsService.js # 데이터 저장
 │   ├── utils/
 │   │   ├── scheduler.js       # 스케줄 관리
 │   │   ├── permissions.js     # 권한 체크
@@ -111,11 +112,25 @@
 
 ### 환경변수 (.env)
 ```
+# Discord 봇 설정
 DISCORD_TOKEN=your_discord_bot_token
-GOOGLE_SHEETS_API_KEY=your_google_api_key  
-GOOGLE_SHEET_ID=your_spreadsheet_id
 GUILD_ID=your_discord_server_id
 COMMAND_PREFIX=!
+
+# Google Sheets 설정
+GOOGLE_SHEET_ID=your_spreadsheet_id
+GOOGLE_SERVICE_ACCOUNT_PATH=./service-account-key.json
+
+# 개발 환경 설정
+NODE_ENV=development
+LOG_LEVEL=info
+
+# 시간대 설정
+TZ=Asia/Seoul
+
+# 알림 시스템 설정
+NOTIFICATION_CHANNEL_ID=your_notification_channel_id_here
+NOTIFICATION_ENABLED=true
 ```
 
 ### 개발 명령어
@@ -189,6 +204,29 @@ Google Sheets의 `보탐봇-길드원정보` 시트에서 권한을 관리합니
 - `!보스정보 <보스명>`: 특정 보스의 상세 정보 확인
 - `!보스일정`: 보스 리젠 일정 확인 (권한 체크 제거됨)
 - `!컷 <보스명> [시간]`: 보스 컷타임 등록 (권한 체크 제거됨)
+
+## 보스 알림 시스템
+
+### 자동 알림 기능
+- **5분전 알림**: 간단한 텍스트 메시지 (`베나투스 5분전`)
+- **1분전 알림**: 컷 버튼이 포함된 메시지 (`베나투스 1분전` + [컷 버튼])
+
+### 인터랙티브 기능
+1. **컷 버튼**: 클릭 시 현재 시간으로 자동 컷타임 등록
+2. **참여 버튼**: 컷 완료 후 표시, 클릭 시 자동 점수 적립
+3. **참여자 확인**: 해당 보스 참여자 목록 조회 (개인 메시지)
+
+### 스케줄러 시스템
+- **실행 주기**: 1분마다 자동 실행
+- **알림 조건**: 보스 리젠 시간 기준 5분전/1분전
+- **중복 방지**: 동일 알림 중복 발송 방지 캐시 시스템
+- **자동 정리**: 1시간 이상 된 캐시 자동 삭제
+
+### 참여 관리 시스템
+- **참여 기록**: Google Sheets 참여이력 시트 자동 기록
+- **점수 적립**: 캐릭터 점수 자동 증가
+- **중복 방지**: 동일 보스 중복 참여 차단
+- **개인 피드백**: `참여완료! 점수변경: 10 + 3 = 13` 형태
 
 ### 권한 관리 파일
 - **위치**: `src/utils/permissions.js`

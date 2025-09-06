@@ -266,9 +266,9 @@ class CharacterService {
       }
 
       const totalScore = participationsResult.data
-        .filter(row => row[1] === characterId) // 캐릭터ID로 필터링
+        .filter(row => String(row[1]) === String(characterId)) // 캐릭터ID로 필터링 (타입 안전)
         .reduce((sum, row) => {
-          const score = parseInt(row[4]) || 0; // 획득점수
+          const score = parseInt(row[5]) || 0; // 획득점수 (5번째 컬럼)
           return sum + score;
         }, 0);
 
@@ -296,7 +296,7 @@ class CharacterService {
         throw new Error('캐릭터정보 시트 조회 실패');
       }
 
-      const characterIndex = charactersResult.data.findIndex(row => row[0] === characterId);
+      const characterIndex = charactersResult.data.findIndex(row => String(row[0]) === String(characterId));
       if (characterIndex === -1) {
         throw new Error('캐릭터를 찾을 수 없습니다');
       }
@@ -339,23 +339,29 @@ class CharacterService {
    * @param {string} actualParticipantId - 실제 참여한 Discord 사용자 ID
    * @param {string} bossName - 보스명
    * @param {number} earnedScore - 획득점수
+   * @param {string} cutTime - 컷타임
    * @returns {Promise<{success: boolean}>}
    */
-  async addParticipation(characterId, actualParticipantId, bossName, earnedScore) {
+  async addParticipation(characterId, actualParticipantId, bossName, earnedScore, cutTime) {
     try {
       const now = new Date().toISOString().replace('T', ' ').substring(0, 19);
+
+      // 캐릭터명을 수식으로 생성 (캐릭터정보 시트 참조)
+      const characterNameFormula = googleSheetsService.generateCharacterNameFormula(characterId);
 
       // 참여이력에 새 레코드 추가
       const participationRow = [
         now, // 참여일시
         characterId, // 캐릭터ID
+        characterNameFormula, // 캐릭터명 (수식)
         actualParticipantId, // 실제참여자ID
         bossName, // 보스명
-        earnedScore // 획득점수
+        earnedScore, // 획득점수
+        cutTime // 컷타임
       ];
 
       // 시트에 데이터 추가
-      await googleSheetsService.addData(SHEET_CONFIG.SHEET_NAMES.PARTICIPATIONS, [participationRow]);
+      await googleSheetsService.appendData(SHEET_CONFIG.SHEET_NAMES.PARTICIPATIONS, participationRow);
 
       // 캐릭터 총점수 업데이트
       await this.updateCharacterTotalScore(characterId);
@@ -369,33 +375,30 @@ class CharacterService {
   }
 
   /**
-   * 중복 참여 체크 (캐릭터 기준)
+   * 중복 참여 체크 (캐릭터 기준) - 컷타임 기반
    * @param {string} characterId - 캐릭터 ID
    * @param {string} bossName - 보스명
-   * @param {string} dateString - 날짜 (YYYY-MM-DD 형식)
+   * @param {string} cutTime - 컷타임
    * @returns {Promise<boolean>} 중복 여부 (true: 이미 참여함)
    */
-  async checkDuplicateParticipation(characterId, bossName, dateString = null) {
+  async checkDuplicateParticipation(characterId, bossName, cutTime) {
     try {
-      // 오늘 날짜 기준으로 체크 (dateString이 없으면)
-      const targetDate = dateString || new Date().toISOString().substring(0, 10);
-
       const participationsResult = await googleSheetsService.getData(SHEET_CONFIG.SHEET_NAMES.PARTICIPATIONS);
       
       if (!participationsResult.success) {
         return false; // 데이터 조회 실패시 중복 없음으로 간주
       }
 
-      // 해당 캐릭터가 오늘 해당 보스에 참여했는지 확인
+      // 해당 캐릭터가 같은 컷타임의 같은 보스에 참여했는지 확인
       const duplicate = participationsResult.data.some(row => {
-        const participationDate = row[0].substring(0, 10); // 참여일시에서 날짜 부분만
-        const participationCharacterId = row[1];
-        const participationBossName = row[3];
+        const participationCharacterId = String(row[1]); // 캐릭터ID (타입 안전)
+        const participationBossName = row[4]; // 보스명
+        const participationCutTime = row[6]; // 컷타임
 
         return (
-          participationCharacterId === characterId &&
+          participationCharacterId === String(characterId) &&
           participationBossName === bossName &&
-          participationDate === targetDate
+          participationCutTime === cutTime
         );
       });
 

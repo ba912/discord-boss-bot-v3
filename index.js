@@ -50,6 +50,27 @@ process.on('uncaughtException', error => {
   process.exit(1);
 });
 
+// 정상 종료 처리
+process.on('SIGINT', () => {
+  console.log('\n⏹️ 봇 종료 신호 받음...');
+  
+  // 스케줄러 정리
+  try {
+    const { schedulerService } = require('./src/services/schedulerService');
+    schedulerService.stop();
+  } catch (error) {
+    console.error('스케줄러 정리 중 오류:', error);
+  }
+  
+  // 클라이언트 정리
+  if (client) {
+    client.destroy();
+  }
+  
+  console.log('👋 봇이 정상적으로 종료되었습니다.');
+  process.exit(0);
+});
+
 // 봇 시작
 client.login(process.env.DISCORD_TOKEN).catch(error => {
   console.error('[봇 시작] 로그인 실패:', error);

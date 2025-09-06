@@ -25,28 +25,15 @@ module.exports = {
         }
         
         
-        // 기존 버튼 처리 로직
-        const buttonType = interaction.customId.split('_')[0];
-        
-        // interactions 폴더에서 해당 버튼 핸들러 찾기
-        const interactionsPath = path.join(__dirname, '..', 'commands', 'interactions');
-        const interactionFiles = fs.readdirSync(interactionsPath).filter(file => file.endsWith('.js'));
-        
-        for (const file of interactionFiles) {
-          const interactionHandler = require(path.join(interactionsPath, file));
-          
-          // 버튼 타입과 핸들러 이름이 매칭되는지 확인
-          if (interactionHandler.name === `${buttonType}_button`) {
-            return await interactionHandler.execute(interaction);
-          }
+        // 새로운 버튼 핸들러 시스템
+        const handled = await module.exports.handleButtonInteraction(interaction);
+        if (!handled) {
+          console.warn(`버튼 핸들러를 찾을 수 없음: ${interaction.customId}`);
+          return await interaction.reply({
+            content: '❌ 알 수 없는 버튼입니다.',
+            flags: MessageFlags.Ephemeral
+          });
         }
-        
-        // 해당하는 핸들러를 찾지 못한 경우
-        console.warn(`버튼 핸들러를 찾을 수 없음: ${interaction.customId}`);
-        return await interaction.reply({
-          content: '❌ 알 수 없는 버튼입니다.',
-          flags: MessageFlags.Ephemeral
-        });
       }
       
       // 셀렉트 메뉴나 다른 인터랙션 타입 처리 (추후 확장 가능)
@@ -76,4 +63,37 @@ module.exports = {
       }
     }
   },
+
+  /**
+   * 버튼 인터랙션 핸들러 찾기 및 실행
+   * @param {ButtonInteraction} interaction - 버튼 인터랙션
+   * @returns {boolean} 핸들러가 실행되었는지 여부
+   */
+  async handleButtonInteraction(interaction) {
+    try {
+      // buttons 폴더에서 핸들러 찾기
+      const buttonsPath = path.join(__dirname, '..', 'commands', 'interactions', 'buttons');
+      
+      if (!fs.existsSync(buttonsPath)) {
+        return false;
+      }
+
+      const buttonFiles = fs.readdirSync(buttonsPath).filter(file => file.endsWith('.js'));
+      
+      for (const file of buttonFiles) {
+        const buttonHandler = require(path.join(buttonsPath, file));
+        
+        // 패턴 매칭 방식으로 핸들러 찾기
+        if (buttonHandler.pattern && buttonHandler.pattern.test(interaction.customId)) {
+          await buttonHandler.execute(interaction);
+          return true;
+        }
+      }
+      
+      return false;
+    } catch (error) {
+      console.error('버튼 핸들러 실행 중 오류:', error);
+      return false;
+    }
+  }
 };

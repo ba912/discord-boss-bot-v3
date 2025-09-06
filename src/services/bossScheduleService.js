@@ -198,26 +198,83 @@ class BossScheduleService {
     }
   }
   
-  // Discord 메시지 형태로 포맷 (HH:mm \t 보스이름)
+  /**
+   * 기존 스케줄을 날짜별로 그룹핑 (간단 버전)
+   * @param {Array} schedules - 보스 스케줄 배열 [{bossName, schedule}]
+   * @returns {Object} 날짜별 스케줄 객체
+   */
+  groupSchedulesByDate(schedules) {
+    const dayGroups = {};
+    
+    schedules.forEach(item => {
+      const { bossName, schedule } = item;
+      
+      let dateKey, timeStr;
+      
+      if (schedule.hasSchedule && schedule.nextRegen) {
+        // 스케줄이 있는 경우: 해당 날짜에 추가
+        const regenDate = new Date(schedule.nextRegen);
+        dateKey = regenDate.toISOString().split('T')[0]; // YYYY-MM-DD
+        timeStr = schedule.timeString || this.formatTime(regenDate);
+      } else {
+        // 스케줄이 없는 경우: 오늘 날짜에 추가
+        const today = new Date();
+        dateKey = today.toISOString().split('T')[0];
+        timeStr = schedule.message || '미등록';
+      }
+      
+      if (!dayGroups[dateKey]) {
+        dayGroups[dateKey] = [];
+      }
+      
+      dayGroups[dateKey].push({
+        bossName,
+        timeStr,
+        regenTime: schedule.nextRegen ? new Date(schedule.nextRegen) : null
+      });
+    });
+    
+    return dayGroups;
+  }
+
+  // Discord 메시지 형태로 포맷 (날짜별 그룹핑)
   formatScheduleForDiscord(schedules) {
     if (!schedules || schedules.length === 0) {
       return '노출된 보스가 없습니다.';
     }
     
-    let message = '**보스 스케줄**\n```\n';
+    // 기존 스케줄을 날짜별로 그룹핑
+    const dayGroups = this.groupSchedulesByDate(schedules);
     
-    schedules.forEach((item) => {
-      const { bossName, schedule } = item;
+    let message = '```⭐️ 보스 리젠 일정 ⭐️\n';
+    
+    // 날짜 키를 정렬해서 순서대로 출력
+    const sortedDates = Object.keys(dayGroups).sort();
+    
+    sortedDates.forEach(dateKey => {
+      const daySchedules = dayGroups[dateKey];
+      if (daySchedules.length === 0) return;
       
-      if (schedule.hasSchedule) {
-        // 시간이 있는 경우: HH:mm \t 보스이름
-        message += `${schedule.timeString}\t${bossName}\n`;
-      } else {
-        // 시간이 없는 경우: 상태메시지 \t 보스이름 (가장 아래)
-        message += `${schedule.message}\t${bossName}\n`;
-      }
+      // 날짜 헤더
+      const date = new Date(dateKey);
+      const monthDay = `${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+      message += `\n📅 ${monthDay}\n`;
+      
+      // 해당 날짜의 보스들을 시간 순으로 정렬
+      daySchedules.sort((a, b) => {
+        if (!a.regenTime && !b.regenTime) return 0;
+        if (!a.regenTime) return 1;
+        if (!b.regenTime) return -1;
+        return a.regenTime.getTime() - b.regenTime.getTime();
+      });
+      
+      // 시간과 보스명 출력
+      daySchedules.forEach(item => {
+        const paddedTime = item.timeStr.padEnd(8, ' ');
+        message += `${paddedTime}${item.bossName}\n`;
+      });
     });
-    
+
     message += '```';
     
     return message;

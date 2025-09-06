@@ -1,33 +1,60 @@
 /**
  * 권한 관리 유틸리티
- * Discord 역할 기반 및 사용자 ID 기반 권한 체크
+ * Google Sheets 기반 권한 체크
  */
+
+const googleSheetsService = require('../services/googleSheetsService');
+const { BOT_CONFIG } = require('../config/constants');
 
 /**
- * 관리자 권한 체크
- * @param {GuildMember} member - Discord 길드 멤버 객체
- * @returns {boolean} 관리자 권한 여부
+ * Google Sheets에서 사용자 권한 조회
+ * @param {string} userId - Discord 사용자 ID
+ * @returns {Promise<string|null>} 권한 정보 ('운영진' 또는 '일반길드원' 또는 null)
  */
-const checkAdminPermission = (member) => {
+const getUserPermissionFromSheet = async (userId) => {
   try {
-    // 1. 환경변수에서 관리자 사용자 ID 목록 체크
-    const adminUserIds = process.env.ADMIN_USER_IDS?.split(',') || [];
-    if (adminUserIds.includes(member.user.id)) {
-      return true;
+    const member = await googleSheetsService.getMemberByUserId(userId);
+    if (!member || !member['권한']) {
+      return null;
     }
+    
+    const permission = member['권한'];
+    // 유효한 권한인지 확인
+    const validPermissions = Object.values(BOT_CONFIG.PERMISSIONS);
+    return validPermissions.includes(permission) ? permission : null;
+  } catch (error) {
+    console.error('❌ 시트에서 권한 조회 중 오류:', error);
+    return null;
+  }
+};
 
-    // 2. 환경변수에서 관리자 역할 ID 체크
-    const adminRoleId = process.env.ADMIN_ROLE_ID;
-    if (adminRoleId && member.roles.cache.has(adminRoleId)) {
-      return true;
-    }
-
-    // 3. Discord 서버 관리자 권한 체크 (기본 권한)
-    if (member.permissions.has('Administrator')) {
-      return true;
-    }
-
+/**
+ * 관리자 권한 체크 (시트 관리 명령어용 - 관리자만 가능)
+ * @param {string} userId - Discord 사용자 ID  
+ * @returns {Promise<boolean>} 관리자 권한 여부
+ */
+const checkSuperAdminPermission = async (userId) => {
+  try {
+    // Google Sheets에서 권한 조회
+    const userPermission = await getUserPermissionFromSheet(userId);
+    return userPermission === BOT_CONFIG.PERMISSIONS.SUPER_ADMIN;
+  } catch (error) {
+    console.error('❌ 관리자 권한 체크 중 오류:', error);
     return false;
+  }
+};
+
+/**
+ * 운영진 이상 권한 체크 (운영진 + 관리자) - 시트 권한만 체크
+ * @param {string} userId - Discord 사용자 ID
+ * @returns {Promise<boolean>} 운영진 이상 권한 여부
+ */
+const checkAdminPermission = async (userId) => {
+  try {
+    // Google Sheets에서 권한 조회만 수행
+    const userPermission = await getUserPermissionFromSheet(userId);
+    return userPermission === BOT_CONFIG.PERMISSIONS.SUPER_ADMIN || 
+           userPermission === BOT_CONFIG.PERMISSIONS.ADMIN;
   } catch (error) {
     console.error('❌ 권한 체크 중 오류:', error);
     return false;
@@ -35,8 +62,30 @@ const checkAdminPermission = (member) => {
 };
 
 /**
- * 명령어 권한 체크 (관리자 명령어용)
+ * 관리자 전용 명령어 권한 체크 (시트 권한만 체크)
  * @param {Message} message - Discord 메시지 객체
+ * @returns {Promise<boolean>} 권한 여부
+ */
+const checkSuperAdminCommandPermission = async (message) => {
+  try {
+    // DM에서는 권한 체크 불가
+    if (!message.guild) {
+      return false;
+    }
+
+    const userId = message.author.id;
+    
+    // Google Sheets에서 관리자 권한 체크만 수행
+    return await checkSuperAdminPermission(userId);
+  } catch (error) {
+    console.error('❌ 관리자 명령어 권한 체크 중 오류:', error);
+    return false;
+  }
+};
+
+/**
+ * 운영진 이상 명령어 권한 체크 (시트 권한만 체크)
+ * @param {Message} message - Discord 메시지 객체  
  * @returns {Promise<boolean>} 권한 여부
  */
 const checkCommandPermission = async (message) => {
@@ -46,20 +95,10 @@ const checkCommandPermission = async (message) => {
       return false;
     }
 
-    // 길드 멤버 정보 가져오기 (이미 캐시된 경우)
-    const member = message.member;
-    if (!member) {
-      // 캐시에 없으면 fetch
-      try {
-        const fetchedMember = await message.guild.members.fetch(message.author.id);
-        return checkAdminPermission(fetchedMember);
-      } catch (fetchError) {
-        console.error('❌ 멤버 정보 가져오기 실패:', fetchError);
-        return false;
-      }
-    }
-
-    return checkAdminPermission(member);
+    const userId = message.author.id;
+    
+    // Google Sheets에서 운영진 이상 권한 체크만 수행
+    return await checkAdminPermission(userId);
   } catch (error) {
     console.error('❌ 명령어 권한 체크 중 오류:', error);
     return false;
@@ -77,11 +116,6 @@ const getPermissionDeniedEmbed = () => {
     description: '이 명령어를 사용할 권한이 없습니다.',
     fields: [
       {
-        name: '📋 필요 권한',
-        value: '• 서버 관리자 권한\n• 봇 관리자 역할\n• 등록된 관리자 사용자',
-        inline: false,
-      },
-      {
         name: '💡 문의',
         value: '권한이 필요하시면 서버 관리자에게 문의해주세요.',
         inline: false,
@@ -91,7 +125,10 @@ const getPermissionDeniedEmbed = () => {
 };
 
 module.exports = {
+  getUserPermissionFromSheet,
+  checkSuperAdminPermission,
   checkAdminPermission,
+  checkSuperAdminCommandPermission,
   checkCommandPermission,
   getPermissionDeniedEmbed,
 };

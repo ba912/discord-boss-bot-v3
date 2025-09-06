@@ -1,5 +1,5 @@
 const googleSheetsService = require('../../../services/googleSheetsService');
-const { checkCommandPermission, getPermissionDeniedEmbed } = require('../../../utils/permissions');
+const { checkSuperAdminCommandPermission, getPermissionDeniedEmbed } = require('../../../utils/permissions');
 
 module.exports = {
   name: 'sheetconnect',
@@ -9,8 +9,8 @@ module.exports = {
   cooldown: 5,
   
   async execute(message, args) {
-    // 관리자 권한 체크
-    const hasPermission = await checkCommandPermission(message);
+    // 관리자 권한 체크 (관리자 전용)
+    const hasPermission = await checkSuperAdminCommandPermission(message);
     if (!hasPermission) {
       const permissionEmbed = getPermissionDeniedEmbed();
       return await message.reply({ embeds: [permissionEmbed] });

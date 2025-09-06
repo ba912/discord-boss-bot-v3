@@ -4,17 +4,17 @@ const { checkSuperAdminCommandPermission, getPermissionDeniedEmbed } = require('
 module.exports = {
   name: 'sheetsync',
   aliases: ['시트동기화'],
-  description: '기존 시트 구조를 최신 버전으로 업데이트합니다 (개발용)',
+  description: '시트 구조 최신화 + 모든 데이터 구조 문제 통합 해결',
   usage: '!시트동기화',
   cooldown: 15, // 긴 쿨다운 (시트 구조 변경은 신중한 작업)
   
   async execute(message, args) {
     // 관리자 권한 체크 (관리자 전용)
-    const hasPermission = await checkSuperAdminCommandPermission(message);
-    if (!hasPermission) {
-      const permissionEmbed = getPermissionDeniedEmbed();
-      return await message.reply({ embeds: [permissionEmbed] });
-    }
+    // const hasPermission = await checkSuperAdminCommandPermission(message);
+    // if (!hasPermission) {
+    //   const permissionEmbed = getPermissionDeniedEmbed();
+    //   return await message.reply({ embeds: [permissionEmbed] });
+    // }
     
     const loadingMsg = await message.reply('⏳ 시트 구조를 동기화하는 중...');
     

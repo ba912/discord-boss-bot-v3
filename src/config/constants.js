@@ -52,14 +52,36 @@ const BOSS_CONFIG = {
 const SHEET_CONFIG = {
   // Google Sheets 설정
   SHEET_NAMES: {
+    // 기존 시트들 (유지)
     BOSS_INFO: '보탐봇-보스정보',
-    MEMBERS: '보탐봇-길드원정보', 
-    PARTICIPATION: '보탐봇-참여이력',
     LOOT_HISTORY: '보탐봇-루팅이력',
+    
+    // 새로운 캐릭터 중심 시트들
+    CHARACTERS: '보탐봇-캐릭터정보',
+    ACCOUNTS: '보탐봇-계정정보', 
+    PARTICIPATIONS: '보탐봇-참여이력',
+    
+    // 레거시 시트들 (호환성 유지)
+    MEMBERS_LEGACY: '보탐봇-길드원정보_백업',
+    PARTICIPATION_LEGACY: '보탐봇-참여이력_백업',
+    
+    // 호환성을 위한 별칭 (기존 코드와 호환)
+    MEMBERS: '보탐봇-길드원정보',
+    PARTICIPATION: '보탐봇-참여이력',
   },
+
+  // 시트 생성 시 필요한 기본 시트들 (백업 제외)
+  PRIMARY_SHEETS: [
+    '보탐봇-보스정보',      // BOSS_INFO
+    '보탐봇-루팅이력',      // LOOT_HISTORY  
+    '보탐봇-캐릭터정보',    // CHARACTERS
+    '보탐봇-계정정보',      // ACCOUNTS
+    '보탐봇-참여이력',      // PARTICIPATIONS
+  ],
   
   // 컬럼 인덱스 (0부터 시작)
   COLUMNS: {
+    // 기존 보스 정보 (유지)
     BOSS_INFO: {
       NAME: 0,
       SCORE: 1,
@@ -70,6 +92,39 @@ const SHEET_CONFIG = {
       CREATED_AT: 6,
       UPDATED_AT: 7,
     },
+    
+    // 새로운 캐릭터 정보 시트 (auto-increment ID 방식)
+    CHARACTERS: {
+      ID: 0,
+      CHARACTER_NAME: 1,
+      TOTAL_SCORE: 2,
+      CREATED_AT: 3,
+      UPDATED_AT: 4,
+    },
+    
+    // 새로운 계정 정보 시트
+    ACCOUNTS: {
+      USER_ID: 0,
+      DISCORD_NICKNAME: 1,
+      DISCORD_TAG: 2,
+      CHARACTER_ID: 3,
+      CHARACTER_NAME: 4,
+      PERMISSION: 5,
+      ACCOUNT_TYPE: 6,
+      JOINED_AT: 7,
+    },
+    
+    // 새로운 참여 이력 시트
+    PARTICIPATIONS: {
+      TIMESTAMP: 0,
+      CHARACTER_ID: 1,
+      CHARACTER_NAME: 2,
+      ACTUAL_PARTICIPANT_ID: 3,
+      BOSS_NAME: 4,
+      EARNED_SCORE: 5,
+    },
+    
+    // 레거시 시트들 (호환성)
     MEMBERS: {
       USER_ID: 0,
       NICKNAME: 1,
@@ -82,6 +137,42 @@ const SHEET_CONFIG = {
       USER_ID: 1,
       BOSS_NAME: 2,
       EARNED_SCORE: 3,
+    },
+  },
+  
+  // 드롭다운 옵션들 (데이터 일관성 확보)
+  DROPDOWN_OPTIONS: {
+    // 계정 유형 (부주는 필요시 동적 확장)
+    ACCOUNT_TYPES: ['본주', '부주'],
+    
+    // 권한 레벨 (3단계 고정)
+    PERMISSIONS: ['일반길드원', '운영진', '관리자'],
+    
+    // 보스 리젠 타입
+    REGEN_TYPES: ['고정시간', '랜덤시간', '수동관리', '일회성'],
+    
+    // 스케줄 노출 여부
+    SCHEDULE_VISIBILITY: ['노출', '비노출'],
+    
+    // 참여 상태 (확장 가능)
+    PARTICIPATION_STATUS: ['참여완료', '참여취소', '지각', '결석'],
+    
+    // 동적 참조 (다른 시트 데이터 참조)
+    CHARACTER_NAMES_REF: "범위참조:'보탐봇-캐릭터정보'!A2:A1000", // 캐릭터정보 시트의 캐릭터명 참조 (헤더 제외)
+  },
+  
+  // 드롭다운 적용 컬럼 매핑 (실제 시트명을 키로 사용)
+  DROPDOWN_COLUMNS: {
+    '보탐봇-보스정보': {
+      2: 'REGEN_TYPES',           // 리젠타입
+      4: 'SCHEDULE_VISIBILITY',   // 스케줄노출여부
+    },
+    '보탐봇-계정정보': {
+      5: 'PERMISSIONS',           // 권한  
+      6: 'ACCOUNT_TYPES',         // 계정유형
+    },
+    '보탐봇-참여이력': {
+      // 동적 참조는 수식으로 처리하므로 드롭다운 불필요
     },
   },
 };

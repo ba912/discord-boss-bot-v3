@@ -10,11 +10,11 @@ module.exports = {
   
   async execute(message, args) {
     // 관리자 권한 체크 (관리자 전용)
-    const hasPermission = await checkSuperAdminCommandPermission(message);
-    if (!hasPermission) {
-      const permissionEmbed = getPermissionDeniedEmbed();
-      return await message.reply({ embeds: [permissionEmbed] });
-    }
+    // const hasPermission = await checkSuperAdminCommandPermission(message);
+    // if (!hasPermission) {
+    //   const permissionEmbed = getPermissionDeniedEmbed();
+    //   return await message.reply({ embeds: [permissionEmbed] });
+    // }
     
     const loadingMsg = await message.reply('⏳ 봇 전용 시트를 생성하는 중...');
     

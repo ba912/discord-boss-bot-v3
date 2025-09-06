@@ -4,26 +4,41 @@
  */
 
 const googleSheetsService = require('../services/googleSheetsService');
+const characterService = require('../services/characterService');
 const { BOT_CONFIG } = require('../config/constants');
 
 /**
- * Google Sheets에서 사용자 권한 조회
+ * 새로운 캐릭터 시스템에서 사용자 권한 조회
  * @param {string} userId - Discord 사용자 ID
- * @returns {Promise<string|null>} 권한 정보 ('운영진' 또는 '일반길드원' 또는 null)
+ * @returns {Promise<string|null>} 권한 정보 ('관리자', '운영진' 또는 '일반길드원' 또는 null)
  */
 const getUserPermissionFromSheet = async (userId) => {
   try {
-    const member = await googleSheetsService.getMemberByUserId(userId);
-    if (!member || !member['권한']) {
+    // 새로운 캐릭터 시스템에서 사용자 정보 조회
+    const characterInfo = await characterService.getCharacterByUserId(userId);
+    
+    if (!characterInfo || !characterInfo.userPermission) {
+      // 레거시 시스템에서도 조회 시도 (하위 호환성)
+      try {
+        const member = await googleSheetsService.getMemberByUserId(userId);
+        if (member && member['권한']) {
+          const permission = member['권한'];
+          const validPermissions = Object.values(BOT_CONFIG.PERMISSIONS);
+          return validPermissions.includes(permission) ? permission : null;
+        }
+      } catch (legacyError) {
+        // 레거시 시트가 없으면 무시 (정상적인 상황)
+        console.log('레거시 권한 조회 실패 (정상):', legacyError.message);
+      }
       return null;
     }
     
-    const permission = member['권한'];
+    const permission = characterInfo.userPermission;
     // 유효한 권한인지 확인
     const validPermissions = Object.values(BOT_CONFIG.PERMISSIONS);
     return validPermissions.includes(permission) ? permission : null;
   } catch (error) {
-    console.error('❌ 시트에서 권한 조회 중 오류:', error);
+    console.error('❌ 권한 조회 중 오류:', error);
     return null;
   }
 };
@@ -35,7 +50,7 @@ const getUserPermissionFromSheet = async (userId) => {
  */
 const checkSuperAdminPermission = async (userId) => {
   try {
-    // Google Sheets에서 권한 조회
+    // 새로운 캐릭터 시스템에서 권한 조회
     const userPermission = await getUserPermissionFromSheet(userId);
     return userPermission === BOT_CONFIG.PERMISSIONS.SUPER_ADMIN;
   } catch (error) {
@@ -45,13 +60,13 @@ const checkSuperAdminPermission = async (userId) => {
 };
 
 /**
- * 운영진 이상 권한 체크 (운영진 + 관리자) - 시트 권한만 체크
+ * 운영진 이상 권한 체크 (운영진 + 관리자) - 새로운 캐릭터 시스템 기준
  * @param {string} userId - Discord 사용자 ID
  * @returns {Promise<boolean>} 운영진 이상 권한 여부
  */
 const checkAdminPermission = async (userId) => {
   try {
-    // Google Sheets에서 권한 조회만 수행
+    // 새로운 캐릭터 시스템에서 권한 조회
     const userPermission = await getUserPermissionFromSheet(userId);
     return userPermission === BOT_CONFIG.PERMISSIONS.SUPER_ADMIN || 
            userPermission === BOT_CONFIG.PERMISSIONS.ADMIN;
@@ -62,7 +77,7 @@ const checkAdminPermission = async (userId) => {
 };
 
 /**
- * 관리자 전용 명령어 권한 체크 (시트 권한만 체크)
+ * 관리자 전용 명령어 권한 체크 (새로운 캐릭터 시스템 기준)
  * @param {Message} message - Discord 메시지 객체
  * @returns {Promise<boolean>} 권한 여부
  */
@@ -75,7 +90,7 @@ const checkSuperAdminCommandPermission = async (message) => {
 
     const userId = message.author.id;
     
-    // Google Sheets에서 관리자 권한 체크만 수행
+    // 새로운 캐릭터 시스템에서 관리자 권한 체크
     return await checkSuperAdminPermission(userId);
   } catch (error) {
     console.error('❌ 관리자 명령어 권한 체크 중 오류:', error);
@@ -84,7 +99,7 @@ const checkSuperAdminCommandPermission = async (message) => {
 };
 
 /**
- * 운영진 이상 명령어 권한 체크 (시트 권한만 체크)
+ * 운영진 이상 명령어 권한 체크 (새로운 캐릭터 시스템 기준)
  * @param {Message} message - Discord 메시지 객체  
  * @returns {Promise<boolean>} 권한 여부
  */
@@ -97,7 +112,7 @@ const checkCommandPermission = async (message) => {
 
     const userId = message.author.id;
     
-    // Google Sheets에서 운영진 이상 권한 체크만 수행
+    // 새로운 캐릭터 시스템에서 운영진 이상 권한 체크
     return await checkAdminPermission(userId);
   } catch (error) {
     console.error('❌ 명령어 권한 체크 중 오류:', error);

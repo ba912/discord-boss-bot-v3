@@ -1,56 +1,84 @@
 const { getUserPermissionFromSheet } = require('../../../utils/permissions');
+const characterService = require('../../../services/characterService');
 const googleSheetsService = require('../../../services/googleSheetsService');
-const { ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 
 module.exports = {
   name: 'myinfo',
   aliases: ['내정보', '정보확인'],
-  description: '자신의 길드 정보를 확인합니다 (권한, 점수 등)',
+  description: '자신의 캐릭터 정보를 확인합니다 (권한, 점수 등)',
   usage: '!내정보',
   cooldown: 5,
   
   async execute(message, args) {
-    const loadingMsg = await message.reply('⏳ 내 정보를 조회하는 중...');
+    const loadingMsg = await message.reply('⏳ 내 캐릭터 정보를 조회하는 중...');
     
     try {
       const userId = message.author.id;
       const displayName = message.author.displayName || message.author.username;
       
-      // Google Sheets에서 사용자 정보 조회
-      const memberInfo = await googleSheetsService.getMemberByUserId(userId);
+      // 새로운 캐릭터 시스템에서 사용자 정보 조회
+      let characterInfo = await characterService.getCharacterByUserId(userId);
       
-      if (!memberInfo) {
-        // 시트에 등록되지 않은 사용자
-        const notRegisteredEmbed = {
-          color: 0xffa500,
-          title: '📋 내 정보',
-          description: `**${displayName}**님의 정보입니다.`,
-          fields: [
-            {
-              name: '🔍 등록 상태',
-              value: '시트에 등록되지 않은 사용자입니다.',
-              inline: false,
-            },
-            {
-              name: '🔒 권한',
-              value: '없음 (등록 필요)',
-              inline: true,
-            },
-            {
-              name: '💡 안내',
-              value: '길드 관리자에게 등록을 요청해주세요.',
-              inline: false,
-            },
-          ],
-          timestamp: new Date().toISOString(),
-        };
+      if (!characterInfo) {
+        // 레거시 시스템에서도 확인 (마이그레이션 전 사용자)
+        let memberInfo = null;
+        try {
+          memberInfo = await googleSheetsService.getMemberByUserId(userId);
+        } catch (error) {
+          // 레거시 시트가 없거나 조회 실패 시 (예: "Unable to parse range: 보탐봇-길드원정보!A:Z")
+          console.log('레거시 시트 조회 실패 (정상):', error.message);
+          memberInfo = null;
+        }
         
-        return await loadingMsg.edit({ content: null, embeds: [notRegisteredEmbed] });
+        if (!memberInfo) {
+          // 완전히 등록되지 않은 사용자
+          const notRegisteredEmbed = {
+            color: 0xffa500,
+            // title: '📋 내 정보',
+            // description: `**${displayName}**님의 정보입니다.`,
+            fields: [
+              {
+                name: '🔍 등록 상태',
+                value: '시트에 등록되지 않은 사용자입니다.',
+                inline: false,
+              },
+              {
+                name: '💡 안내',
+                value: '운영진에게 계정 추가 요청 해주세요.',
+                inline: false,
+              },
+            ]
+          };
+          
+          return await loadingMsg.edit({ content: null, embeds: [notRegisteredEmbed] });
+        } else {
+          // 레거시 데이터 존재 - 마이그레이션 안내
+          const migrationNeededEmbed = {
+            color: 0xffa500,
+            title: '🔄 시스템 업데이트 필요',
+            description: `**${displayName}**님의 정보를 찾았지만, 새로운 캐릭터 시스템으로 마이그레이션이 필요합니다.`,
+            fields: [
+              {
+                name: '📊 현재 정보 (레거시)',
+                value: `• 닉네임: ${memberInfo['닉네임'] || displayName}\n• 권한: ${memberInfo['권한'] || '일반길드원'}\n• 총점수: ${memberInfo['총점수'] || '0'}점`,
+                inline: false,
+              },
+              {
+                name: '🔄 해결 방법',
+                value: '관리자가 `!시트동기화` 명령어를 실행하여 새로운 시스템으로 데이터를 이전해야 합니다.',
+                inline: false,
+              },
+            ],
+            timestamp: new Date().toISOString(),
+          };
+          
+          return await loadingMsg.edit({ content: null, embeds: [migrationNeededEmbed] });
+        }
       }
       
-      // 등록된 사용자 기본 정보 표시
-      const permission = memberInfo['권한'] || '일반길드원';
-      const nickname = memberInfo['닉네임'] || displayName;
+      // 새로운 캐릭터 시스템 - 정상 정보 표시
+      const permission = characterInfo.userPermission || '일반길드원';
+      const characterName = characterInfo.characterName;
       
       // 권한에 따른 색상과 아이콘 설정
       let color, permissionIcon;
@@ -65,12 +93,16 @@ module.exports = {
         permissionIcon = '👤';
       }
       
-      const basicInfoEmbed = {
+      // 계정 유형에 따른 아이콘
+      const accountTypeIcon = characterInfo.accountType === '본주' ? '👤' : '🔗';
+      
+      const characterInfoEmbed = {
         color: color,
+        title: `📋 ${characterName} 캐릭터 정보`,
         fields: [
           {
-            name: '👤 닉네임',
-            value: nickname,
+            name: '🎮 캐릭터명',
+            value: characterName,
             inline: true,
           },
           {
@@ -78,37 +110,32 @@ module.exports = {
             value: permission,
             inline: true,
           },
+          {
+            name: '🏆 총 점수',
+            value: `${characterInfo.totalScore}점`,
+            inline: true,
+          },
         ],
       };
       
       // 권한별 사용 가능한 명령어 안내
       if (permission === '관리자') {
-        basicInfoEmbed.fields.push({
+        characterInfoEmbed.fields.push({
           name: '🔧 관리자 명령어',
-          value: '• `!시트연결확인` - Google Sheets 연결 상태 확인\n• `!시트생성` - 봇 전용 시트 생성',
+          value: '• `!시트동기화` - 시트 구조 최신화\n• `!시트연결확인` - Google Sheets 연결 상태 확인\n• `!보스삭제` - 보스 삭제',
           inline: false,
         });
       } else if (permission === '운영진') {
-        basicInfoEmbed.fields.push({
+        characterInfoEmbed.fields.push({
           name: '⭐ 운영진 명령어',
-          value: '운영진 전용 명령어는 추후 추가될 예정입니다.',
+          value: '• `!보스추가` - 새로운 보스 등록',
           inline: false,
         });
       }
       
-      // 점수보기 버튼 생성
-      const scoreButton = new ButtonBuilder()
-        .setCustomId(`score_${userId}`)
-        .setLabel('🏆 점수보기')
-        .setStyle(ButtonStyle.Primary);
-      
-      const row = new ActionRowBuilder()
-        .addComponents(scoreButton);
-      
       await loadingMsg.edit({ 
         content: null, 
-        embeds: [basicInfoEmbed],
-        components: [row]
+        embeds: [characterInfoEmbed]
       });
       
     } catch (error) {
@@ -116,8 +143,8 @@ module.exports = {
       
       const errorEmbed = {
         color: 0xff0000,
-        title: '❌ 정보 조회 실패',
-        description: '사용자 정보를 조회하는 중 오류가 발생했습니다.',
+        title: '❌ 캐릭터 정보 조회 실패',
+        description: '캐릭터 정보를 조회하는 중 오류가 발생했습니다.',
         fields: [
           {
             name: '🔍 오류 내용',
@@ -125,7 +152,7 @@ module.exports = {
           },
           {
             name: '💡 해결 방안',
-            value: '• 잠시 후 다시 시도해주세요\n• 문제가 계속되면 관리자에게 문의해주세요',
+            value: '• 시스템이 새로 업데이트되었습니다. `!시트동기화`가 필요할 수 있습니다.\n• 잠시 후 다시 시도해주세요\n• 문제가 계속되면 관리자에게 문의해주세요',
           },
         ],
         timestamp: new Date().toISOString(),
@@ -133,5 +160,5 @@ module.exports = {
       
       await loadingMsg.edit({ content: null, embeds: [errorEmbed] });
     }
-  },
+  }
 };

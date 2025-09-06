@@ -231,9 +231,6 @@ module.exports = {
         scheduleVisible
       };
 
-      // 등록자 정보 (닉네임)
-      const registrar = interaction.member?.displayName || interaction.user.displayName;
-
       // 임시 응답 (처리 중 메시지)
       await interaction.reply({
         content: '⏳ 보스 정보를 등록 중입니다...',
@@ -241,7 +238,7 @@ module.exports = {
       });
 
       // 보스 추가 실행
-      await bossService.addBoss(bossData, registrar);
+      await bossService.addBoss(bossData);
 
       // 간단한 성공 응답
       await interaction.editReply({

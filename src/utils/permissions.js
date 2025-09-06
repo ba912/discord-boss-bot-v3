@@ -14,8 +14,12 @@ const { BOT_CONFIG } = require('../config/constants');
  */
 const getUserPermissionFromSheet = async (userId) => {
   try {
+    console.log(`[권한] getUserPermissionFromSheet 시작`);
+    const getUserStart = Date.now();
+    
     // 새로운 캐릭터 시스템에서 사용자 정보 조회
     const characterInfo = await characterService.getCharacterByUserId(userId);
+    console.log(`[권한] characterService.getCharacterByUserId 완료: ${Date.now() - getUserStart}ms`);
     
     if (!characterInfo || !characterInfo.userPermission) {
       // 레거시 시스템에서도 조회 시도 (하위 호환성)
@@ -66,8 +70,13 @@ const checkSuperAdminPermission = async (userId) => {
  */
 const checkAdminPermission = async (userId) => {
   try {
+    console.log(`[권한] checkAdminPermission 시작 - 사용자: ${userId}`);
+    const permissionStart = Date.now();
+    
     // 새로운 캐릭터 시스템에서 권한 조회
     const userPermission = await getUserPermissionFromSheet(userId);
+    console.log(`[권한] getUserPermissionFromSheet 완료: ${Date.now() - permissionStart}ms, 권한: ${userPermission}`);
+    
     return userPermission === BOT_CONFIG.PERMISSIONS.SUPER_ADMIN || 
            userPermission === BOT_CONFIG.PERMISSIONS.ADMIN;
   } catch (error) {

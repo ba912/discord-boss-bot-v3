@@ -295,7 +295,7 @@ class GoogleSheetsService {
     return {
       // 기존 시트들 (유지)
       [SHEET_CONFIG.SHEET_NAMES.BOSS_INFO]: [
-        '보스명', '점수', '리젠타입', '리젠설정', '스케줄노출여부', '등록자', '생성일시', '수정일시'
+        '보스명', '점수', '리젠타입', '리젠설정', '스케줄노출여부', '컷타임'
       ],
       [SHEET_CONFIG.SHEET_NAMES.LOOT_HISTORY]: [
         '루팅일시', '보스명', '아이템명', '획득자', '분배일시'
@@ -1323,9 +1323,7 @@ class GoogleSheetsService {
         regenType: row[2] || '',
         regenSettings: row[3] || '',
         scheduleVisible: row[4] || '',
-        registrar: row[5] || '',
-        createdAt: row[6] || '',
-        updatedAt: row[7] || ''
+        cutTime: row[5] || null
       }));
     } catch (error) {
       console.error('❌ 보스 목록 조회 실패:', error);
@@ -1348,9 +1346,7 @@ class GoogleSheetsService {
         regenType: bossRow[2] || '',
         regenSettings: bossRow[3] || '',
         scheduleVisible: bossRow[4] || '',
-        registrar: bossRow[5] || '',
-        createdAt: bossRow[6] || '',
-        updatedAt: bossRow[7] || ''
+        cutTime: bossRow[5] || null
       };
     } catch (error) {
       console.error('❌ 보스 조회 실패:', error);
@@ -1403,6 +1399,16 @@ class GoogleSheetsService {
     }
   }
 
+  // 보스 컷타임 업데이트
+  async updateBossCutTime(bossName, cutTime) {
+    try {
+      return await this.updateBoss(bossName, { cutTime });
+    } catch (error) {
+      console.error('❌ 보스 컷타임 업데이트 실패:', error);
+      throw error;
+    }
+  }
+
   // 보스 정보 업데이트
   async updateBoss(bossName, updateData) {
     try {
@@ -1422,14 +1428,12 @@ class GoogleSheetsService {
         updateData.regenType || currentData[2],
         updateData.regenSettings || currentData[3],
         updateData.scheduleVisible || currentData[4],
-        updateData.registrar || currentData[5],
-        currentData[6], // 생성일시 유지
-        new Date().toISOString().replace('T', ' ').substring(0, 19) // 수정일시 업데이트
+        updateData.cutTime !== undefined ? updateData.cutTime : currentData[5]
       ];
 
       await this.updateData(
         SHEET_CONFIG.SHEET_NAMES.BOSS_INFO,
-        `A${rowNumber}:H${rowNumber}`,
+        `A${rowNumber}:F${rowNumber}`,
         [updatedRow]
       );
 

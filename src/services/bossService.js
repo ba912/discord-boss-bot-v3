@@ -84,7 +84,7 @@ const formatRegenSettings = (regenType, regenSettings) => {
 };
 
 // 보스 추가
-const addBoss = async (bossData, registrar) => {
+const addBoss = async (bossData) => {
   try {
     // 데이터 검증
     validateBossData(bossData);
@@ -95,9 +95,6 @@ const addBoss = async (bossData, registrar) => {
       throw new Error('이미 등록된 보스명입니다.');
     }
     
-    // 현재 시간
-    const now = new Date().toISOString().replace('T', ' ').substring(0, 19);
-    
     // 보스 데이터 생성
     const rowData = [
       bossData.bossName,
@@ -105,9 +102,7 @@ const addBoss = async (bossData, registrar) => {
       bossData.regenType,
       bossData.regenSettings,
       bossData.scheduleVisible,
-      registrar,
-      now,
-      now
+      null // 컷타임 (초기값은 null)
     ];
     
     // Google Sheets에 추가
@@ -149,9 +144,7 @@ const getBossList = async (includeHidden = false) => {
       regenSettings: boss.regenSettings,
       regenDisplay: formatRegenSettings(boss.regenType, boss.regenSettings),
       scheduleVisible: boss.scheduleVisible,
-      registrar: boss.registrar,
-      createdAt: boss.createdAt,
-      updatedAt: boss.updatedAt
+      cutTime: boss.cutTime
     }));
   } catch (error) {
     throw new Error(`보스 목록 조회 실패: ${error.message}`);
@@ -174,9 +167,7 @@ const getBossByName = async (bossName) => {
       regenSettings: boss.regenSettings,
       regenDisplay: formatRegenSettings(boss.regenType, boss.regenSettings),
       scheduleVisible: boss.scheduleVisible,
-      registrar: boss.registrar,
-      createdAt: boss.createdAt,
-      updatedAt: boss.updatedAt
+      cutTime: boss.cutTime
     };
   } catch (error) {
     throw new Error(`보스 정보 조회 실패: ${error.message}`);
@@ -271,23 +262,22 @@ const formatBossInfoForDiscord = (boss) => {
         inline: true
       },
       {
-        name: '👤 등록자',
-        value: boss.registrar,
-        inline: true
-      },
-      {
-        name: '📅 등록일시',
-        value: boss.createdAt,
-        inline: true
-      },
-      {
-        name: '🔄 수정일시',
-        value: boss.updatedAt,
+        name: '⏱️ 컷타임',
+        value: boss.cutTime || '미등록',
         inline: true
       }
     ],
     timestamp: new Date().toISOString()
   };
+};
+
+// 보스 정보 업데이트 (컷타임 포함)
+const updateBoss = async (bossName, updateData) => {
+  try {
+    return await googleSheetsService.updateBoss(bossName, updateData);
+  } catch (error) {
+    throw new Error(`보스 정보 업데이트 실패: ${error.message}`);
+  }
 };
 
 const bossService = {
@@ -297,6 +287,7 @@ const bossService = {
   getBossList,
   getBossByName,
   deleteBoss,
+  updateBoss,
   formatBossListForDiscord,
   formatBossInfoForDiscord
 };

@@ -37,80 +37,20 @@ class TTSService {
    */
   async loadProviders() {
     try {
-      // ResponsiveVoice TTS 제공자 로드 (완전 무료, 게임 길드 최적화, 우선순위 1)
-      try {
-        const { ResponsiveVoiceTTS } = require('./providers/responsiveVoiceTTS');
-        const responsiveVoiceProvider = new ResponsiveVoiceTTS();
-        
-        if (responsiveVoiceProvider.isAvailable()) {
-          this.providers.set('responsivevoice', responsiveVoiceProvider);
-          console.log('✅ ResponsiveVoice TTS 제공자 로드 완료 (완전 무료, 게임 길드 최적화)');
-          
-          // 기본 제공자로 설정
-          if (!this.currentProvider) {
-            this.currentProvider = responsiveVoiceProvider;
-          }
-        }
-      } catch (error) {
-        console.warn('⚠️ ResponsiveVoice TTS 로드 실패:', error.message);
-      }
-
-      // Edge TTS 제공자 로드 (완전 무료, 우선순위 2)
-      try {
-        const { EdgeTTS } = require('./providers/edgeTTS');
-        const edgeProvider = new EdgeTTS();
-        
-        if (edgeProvider.isAvailable()) {
-          this.providers.set('edge', edgeProvider);
-          console.log('✅ Microsoft Edge TTS 제공자 로드 완료 (완전 무료)');
-          
-          // ResponsiveVoice가 없으면 Edge를 기본으로 설정
-          if (!this.currentProvider) {
-            this.currentProvider = edgeProvider;
-          }
-        }
-      } catch (error) {
-        console.warn('⚠️ Edge TTS 로드 실패:', error.message);
-      }
-
-      // ElevenLabs TTS 제공자 로드 (무료 계층, 우선순위 2)
-      try {
-        const { ElevenLabsTTS } = require('./providers/elevenLabsTTS');
-        const elevenLabsProvider = new ElevenLabsTTS();
-        
-        if (elevenLabsProvider.isAvailable()) {
-          this.providers.set('elevenlabs', elevenLabsProvider);
-          console.log('✅ ElevenLabs TTS 제공자 로드 완료 (무료 계층)');
-          
-          // Edge TTS가 없으면 ElevenLabs를 기본으로 설정
-          if (!this.currentProvider) {
-            this.currentProvider = elevenLabsProvider;
-          }
-        }
-      } catch (error) {
-        console.warn('⚠️ ElevenLabs TTS 로드 실패:', error.message);
-      }
-
-      // Google Cloud TTS 제공자 로드 (백업용, 우선순위 3)
-      try {
-        const { GoogleCloudTTS } = require('./providers/googleCloudTTS');
-        const googleProvider = new GoogleCloudTTS();
-        
-        if (await googleProvider.isAvailable()) {
-          this.providers.set('google', googleProvider);
-          console.log('✅ Google Cloud TTS 제공자 로드 완료 (백업용)');
-          
-          // 다른 제공자가 없으면 Google을 기본으로 설정
-          if (!this.currentProvider) {
-            this.currentProvider = googleProvider;
-          }
-        }
-      } catch (error) {
-        console.warn('⚠️ Google Cloud TTS 로드 실패:', error.message);
+      // ResponsiveVoice TTS 제공자 로드 (유일한 제공자)
+      const { ResponsiveVoiceTTS } = require('./providers/responsiveVoiceTTS');
+      const responsiveVoiceProvider = new ResponsiveVoiceTTS();
+      
+      if (responsiveVoiceProvider.isAvailable()) {
+        this.providers.set('responsivevoice', responsiveVoiceProvider);
+        this.currentProvider = responsiveVoiceProvider;
+        console.log('✅ ResponsiveVoice TTS 제공자 로드 완료 (완전 무료, 게임 길드 최적화)');
+      } else {
+        console.error('❌ ResponsiveVoice TTS 제공자를 사용할 수 없습니다');
       }
       
       if (!this.currentProvider) {
-        console.warn('⚠️ 사용 가능한 TTS 제공자가 없습니다');
+        console.error('❌ 사용 가능한 TTS 제공자가 없습니다');
       } else {
         console.log(`🎵 현재 TTS 제공자: ${this.getCurrentProviderName()}`);
       }
@@ -122,7 +62,7 @@ class TTSService {
 
   /**
    * TTS 제공자 변경
-   * @param {string} providerName - 제공자 이름 (google, azure, elevenlabs)
+   * @param {string} providerName - 제공자 이름 (responsivevoice)
    * @returns {boolean} 변경 성공 여부
    */
   setProvider(providerName) {

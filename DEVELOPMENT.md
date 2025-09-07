@@ -264,20 +264,32 @@ YYYY-MM-DD-HH-MM_작업명.md
 
 ## 개발 워크플로우
 
-### 브랜치 전략
-- `main`: 프로덕션 코드
-- `develop`: 개발 중인 코드
-- `feature/기능명`: 새로운 기능 개발
-- `hotfix/버그명`: 긴급 버그 수정
+### 🚨 브랜치 전략 (배포 후 강화됨)
+**⚠️ CRITICAL: main 브랜치 직접 수정 절대 금지!**
 
-### 개발 순서
-1. **작업 로그 생성** (work-logs/template.md 사용)
-2. 기능 설계 및 CLAUDE.md 업데이트
-3. 브랜치 생성 (`feature/boss-command`)
-4. 테스트 주도 개발 (TDD)
-5. 코드 구현
+- `main`: 🔒 **프로덕션 (Cloudtype 자동 배포)** - 직접 수정 금지
+- `feature/기능명`: ✅ 새로운 기능 개발
+- `fix/버그명`: ✅ 일반 버그 수정
+- `hotfix/긴급수정명`: 🆘 긴급 프로덕션 수정
+- `docs/문서명`: 📝 문서 업데이트
+
+### 🔄 배포 후 개발 순서 (필수 준수)
+1. **브랜치 생성**: `git checkout -b feature/new-function`
+2. **작업 로그 생성** (work-logs/template.md 사용)
+3. 기능 설계 및 문서 업데이트
+4. 로컬 테스트 (`npm start` 확인)
+5. 코드 구현 및 테스트
 6. 린트/포맷 검사 (`npm run lint`)
-7. **작업 로그 업데이트** (구현 내용 기록)
-8. 커밋 및 푸시
-9. 코드 리뷰 (필요시)
-10. 메인 브랜치 병합
+7. **작업 로그 업데이트** (구현 내용 기록)  
+8. 커밋: `git commit -m "feat: 새 기능 추가"`
+9. 푸시: `git push origin feature/new-function`
+10. **Pull Request 생성** → 코드 리뷰 → main 병합
+
+### ⚡ 긴급 수정 (Hotfix) 프로세스
+```bash
+git checkout -b hotfix/critical-bug
+# 수정 작업
+git commit -m "hotfix: 긴급 버그 수정"  
+git push origin hotfix/critical-bug
+# → 즉시 PR 생성 및 병합 → 자동 배포
+```

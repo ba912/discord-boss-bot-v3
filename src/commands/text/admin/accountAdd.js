@@ -9,12 +9,12 @@ module.exports = {
   cooldown: 10,
   
   async execute(message, args) {
-    // 테스트용 임시 권한 완화 (누구나 사용 가능)
-    // const hasPermission = await checkSuperAdminCommandPermission(message);
-    // if (!hasPermission) {
-    //   const permissionEmbed = getPermissionDeniedEmbed();
-    //   return await message.reply({ embeds: [permissionEmbed] });
-    // }
+    // 운영진 이상 권한 체크
+    const hasPermission = await checkCommandPermission(message);
+    if (!hasPermission) {
+      const permissionEmbed = getPermissionDeniedEmbed();
+      return await message.reply({ embeds: [permissionEmbed] });
+    }
 
     // 즉시 처리 중 메시지 표시
     const processingMessage = await message.reply('⏳ 계정을 추가하는 중...');

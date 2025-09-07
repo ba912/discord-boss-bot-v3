@@ -24,7 +24,7 @@ class GoogleSheetsService {
         ],
       };
 
-      // 환경변수에 JSON 내용이 있으면 우선 사용 (클라우드 배포용)
+      // GOOGLE_SERVICE_ACCOUNT_JSON 환경변수 사용 (로컬/클라우드 통일)
       if (process.env.GOOGLE_SERVICE_ACCOUNT_JSON) {
         try {
           authConfig.credentials = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON);
@@ -34,10 +34,8 @@ class GoogleSheetsService {
           throw new Error('환경변수 GOOGLE_SERVICE_ACCOUNT_JSON이 올바른 JSON 형식이 아닙니다.');
         }
       } else {
-        // 파일 방식 (로컬 개발용)
-        const serviceAccountPath = this.serviceAccountPath || path.join(__dirname, '..', '..', 'service-account-key.json');
-        authConfig.keyFile = serviceAccountPath;
-        console.log('✅ Google Service Account 인증: 파일 경로 사용 -', serviceAccountPath);
+        // 환경변수가 없으면 에러 (파일 방식 제거)
+        throw new Error('환경변수 GOOGLE_SERVICE_ACCOUNT_JSON이 설정되지 않았습니다. 로컬 개발 시에도 이 환경변수를 설정해주세요.');
       }
       
       // JWT 인증 클라이언트 생성

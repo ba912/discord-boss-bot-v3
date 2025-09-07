@@ -71,7 +71,6 @@ class SchedulerService {
 
     if (this.task) {
       this.task.stop();
-      this.task.destroy();
       this.task = null;
     }
 
@@ -284,8 +283,8 @@ class SchedulerService {
       if (playSuccess) {
         console.log(`✅ [TTS] 음성 알림 완료: ${bossName}`);
         
-        // 5분 후 자동 퇴장 타이머 설정
-        voiceChannelService.setAutoLeaveTimer();
+        // 봇이 음성 채널에 상주하도록 자동 퇴장 타이머 설정하지 않음
+        // voiceChannelService.setAutoLeaveTimer(); // 주석 처리 - 상주 목적
       } else {
         console.error(`[TTS] 음성 재생 실패: ${bossName}`);
       }

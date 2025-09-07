@@ -95,8 +95,8 @@ module.exports = {
       if (playSuccess) {
         console.log(`✅ [!말 명령어] 음성 알림 완료: "${text}"`);
         
-        // 5분 후 자동 퇴장 타이머 설정 (스케줄러와 동일)
-        voiceChannelService.setAutoLeaveTimer();
+        // 봇이 음성 채널에 상주하도록 자동 퇴장 타이머 설정하지 않음
+        // voiceChannelService.setAutoLeaveTimer(); // 주석 처리 - 상주 목적
         return true;
       } else {
         console.error(`[!말 명령어] 음성 재생 실패: "${text}"`);

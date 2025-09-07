@@ -50,26 +50,50 @@ process.on('uncaughtException', error => {
   process.exit(1);
 });
 
-// 정상 종료 처리
-process.on('SIGINT', () => {
-  console.log('\n⏹️ 봇 종료 신호 받음...');
+// Graceful shutdown 처리
+async function gracefulShutdown(signal) {
+  console.log(`\n⏹️ 봇 종료 신호 받음 (${signal})...`);
   
-  // 스케줄러 정리
   try {
+    // 스케줄러 정리
+    console.log('📅 스케줄러 중지 중...');
     const { schedulerService } = require('./src/services/schedulerService');
     schedulerService.stop();
+    console.log('✅ 스케줄러 중지 완료');
   } catch (error) {
-    console.error('스케줄러 정리 중 오류:', error);
+    console.error('❌ 스케줄러 정리 중 오류:', error);
   }
   
-  // 클라이언트 정리
-  if (client) {
-    client.destroy();
+  try {
+    // 음성 채널 정리
+    console.log('🎵 음성 채널 연결 해제 중...');
+    const { voiceChannelService } = require('./src/services/voiceChannelService');
+    await voiceChannelService.leaveChannel();
+    voiceChannelService.clearAutoLeaveTimer();
+    console.log('✅ 음성 채널 연결 해제 완료');
+  } catch (error) {
+    console.error('❌ 음성 채널 정리 중 오류:', error);
+  }
+  
+  try {
+    // Discord 클라이언트 정리
+    console.log('🤖 Discord 클라이언트 종료 중...');
+    if (client) {
+      client.destroy();
+    }
+    console.log('✅ Discord 클라이언트 종료 완료');
+  } catch (error) {
+    console.error('❌ 클라이언트 정리 중 오류:', error);
   }
   
   console.log('👋 봇이 정상적으로 종료되었습니다.');
   process.exit(0);
-});
+}
+
+// 다양한 종료 신호 처리
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGQUIT', () => gracefulShutdown('SIGQUIT'));
 
 // 봇 시작
 client.login(process.env.DISCORD_TOKEN).catch(error => {

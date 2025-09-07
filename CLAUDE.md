@@ -1,5 +1,21 @@
 # CLAUDE.md
 
+## 🚨 AI 세션 시작 필수 체크
+
+**새로운 AI 도구로 작업을 시작할 때마다 반드시 먼저 실행:**
+```bash
+./.ai-context/status.sh
+```
+
+**그 다음 순서대로 읽기:**
+1. `.ai-context/current-work.md` - 현재 작업 상황 (가장 중요!)
+2. `.ai-context/codebase-overview.md` - 전체 프로젝트 구조  
+3. 이 문서 계속 읽기 - 개발 가이드
+
+**작업 완료 후 반드시:** `.ai-context/current-work.md` 업데이트
+
+---
+
 이 파일은 Claude Code (claude.ai/code)가 이 저장소에서 작업할 때 참고하는 가이드라인을 제공합니다.
 
 ## 프로젝트 개요

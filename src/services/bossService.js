@@ -48,7 +48,7 @@ const validateBossData = (bossData) => {
       }
       
       if (!settings.time || !/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/.test(settings.time)) {
-        throw new Error('시간은 HH:MM 형식으로 입력해주세요. (예: 21:00)');
+        throw new Error('시간은 HHMM 형식으로 입력해주세요. (예: 21:00)');
       }
     }
   } catch (parseError) {

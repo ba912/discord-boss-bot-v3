@@ -77,6 +77,7 @@ class GoogleSheetsService {
 
     // 백업 시트 제외, 필요한 기본 시트들만 생성
     const sheetNames = SHEET_CONFIG.PRIMARY_SHEETS;
+    console.log('📋 생성할 시트 목록:', sheetNames);
     const headers = this.getSheetHeaders();
     const results = [];
 
@@ -87,8 +88,11 @@ class GoogleSheetsService {
       });
       
       const existingSheets = response.data.sheets.map(sheet => sheet.properties.title);
+      console.log('📊 기존 시트 목록:', existingSheets);
 
       for (const sheetName of sheetNames) {
+        console.log(`🔍 시트 확인 중: ${sheetName}`);
+        
         // 진행상황 콜백 호출
         if (progressCallback) {
           await progressCallback(`🔄 ${sheetName} 시트 확인 중...`);
@@ -113,6 +117,13 @@ class GoogleSheetsService {
         
         // 헤더 설정
         await this.setHeaders(sheetName, headers[sheetName]);
+        
+        // 설정 시트인 경우 기본 데이터 추가
+        if (sheetName === SHEET_CONFIG.SHEET_NAMES.SETTINGS) {
+          console.log(`🔧 설정 시트 초기화 시작: ${sheetName}`);
+          await this.initializeSettingsSheet();
+          console.log(`✅ 설정 시트 초기화 완료: ${sheetName}`);
+        }
         
         const message = `✅ ${sheetName} 시트 생성 완료`;
         results.push(message);
@@ -196,6 +207,12 @@ class GoogleSheetsService {
           // 시트가 없으면 새로 생성
           await this.createSheet(sheetName);
           await this.setHeaders(sheetName, headers[sheetName]);
+          
+          // 설정 시트인 경우 기본 데이터 추가
+          if (sheetName === SHEET_CONFIG.SHEET_NAMES.SETTINGS) {
+            await this.initializeSettingsSheet();
+          }
+          
           const message = `✅ ${sheetName} 시트 새로 생성됨`;
           results.push(message);
           if (progressCallback) {
@@ -325,6 +342,9 @@ class GoogleSheetsService {
       ],
       [SHEET_CONFIG.SHEET_NAMES.PARTICIPATIONS]: [
         '참여일시', '캐릭터ID', '캐릭터명', '실제참여자ID', '보스명', '획득점수', '컷타임'
+      ],
+      [SHEET_CONFIG.SHEET_NAMES.SETTINGS]: [
+        '설정명', '설정값', '설명', '수정일시'
       ],
       
       // 레거시 시트들 (호환성 유지)
@@ -2031,7 +2051,8 @@ class GoogleSheetsService {
       SHEET_CONFIG.SHEET_NAMES.CHARACTERS,
       SHEET_CONFIG.SHEET_NAMES.ACCOUNTS,
       SHEET_CONFIG.SHEET_NAMES.PARTICIPATIONS,
-      SHEET_CONFIG.SHEET_NAMES.LOOT_HISTORY
+      SHEET_CONFIG.SHEET_NAMES.LOOT_HISTORY,
+      SHEET_CONFIG.SHEET_NAMES.SETTINGS
     ];
     
     const headers = this.getSheetHeaders();
@@ -2054,6 +2075,12 @@ class GoogleSheetsService {
           // 시트가 없으면 새로 생성
           await this.createSheet(sheetName);
           await this.setHeaders(sheetName, headers[sheetName]);
+          
+          // 설정 시트인 경우 기본 데이터 추가
+          if (sheetName === SHEET_CONFIG.SHEET_NAMES.SETTINGS) {
+            await this.initializeSettingsSheet();
+          }
+          
           const message = `✅ ${sheetName} 시트 새로 생성됨`;
           results.push(message);
           if (progressCallback) {
@@ -2126,6 +2153,111 @@ class GoogleSheetsService {
     } catch (error) {
       console.error('❌ 일반 시트 동기화 실패:', error);
       throw error;
+    }
+  }
+
+  /**
+   * 설정 시트 초기화 (기본 설정값들 추가)
+   */
+  async initializeSettingsSheet() {
+    try {
+      console.log('🔧 설정 시트 기본 데이터 초기화 중...');
+      
+      // 기본 설정 데이터
+      const defaultSettings = [
+        ['참여 제한 시간(분)', '120', '보스 컷 후 참여 버튼을 활성화할 시간 (분 단위)', new Date().toISOString().replace('T', ' ').substring(0, 19)]
+      ];
+
+      // 데이터 추가
+      await this.sheets.spreadsheets.values.append({
+        spreadsheetId: this.spreadsheetId,
+        range: `${SHEET_CONFIG.SHEET_NAMES.SETTINGS}!A2`,
+        valueInputOption: 'USER_ENTERED',
+        resource: {
+          values: defaultSettings
+        }
+      });
+
+      console.log('✅ 설정 시트 기본 데이터 초기화 완료');
+      
+    } catch (error) {
+      console.error('❌ 설정 시트 초기화 실패:', error);
+      // 초기화 실패해도 시트 생성은 계속 진행
+    }
+  }
+
+  /**
+   * 설정값 조회
+   * @param {string} settingName - 설정명
+   * @returns {Promise<string|null>} 설정값
+   */
+  async getSettingValue(settingName) {
+    try {
+      const result = await this.getData(SHEET_CONFIG.SHEET_NAMES.SETTINGS);
+      
+      if (!result.success || !result.data) {
+        return null;
+      }
+
+      // 설정명으로 찾기
+      for (const row of result.data) {
+        if (row.length >= 2 && row[0] === settingName) {
+          return row[1]; // 설정값 반환
+        }
+      }
+
+      return null;
+    } catch (error) {
+      console.error(`❌ 설정값 조회 실패 (${settingName}):`, error);
+      return null;
+    }
+  }
+
+  /**
+   * 설정값 업데이트
+   * @param {string} settingName - 설정명
+   * @param {string} settingValue - 설정값
+   * @returns {Promise<boolean>} 성공 여부
+   */
+  async updateSettingValue(settingName, settingValue) {
+    try {
+      const result = await this.getData(SHEET_CONFIG.SHEET_NAMES.SETTINGS);
+      
+      if (!result.success || !result.data) {
+        return false;
+      }
+
+      // 설정명으로 행 찾기
+      for (let i = 0; i < result.data.length; i++) {
+        const row = result.data[i];
+        if (row.length >= 2 && row[0] === settingName) {
+          const rowNumber = i + 2; // 헤더 다음 행부터
+          
+          // 해당 행의 설정값과 수정일시 업데이트
+          await this.sheets.spreadsheets.values.update({
+            spreadsheetId: this.spreadsheetId,
+            range: `${SHEET_CONFIG.SHEET_NAMES.SETTINGS}!B${rowNumber}:D${rowNumber}`,
+            valueInputOption: 'USER_ENTERED',
+            resource: {
+              values: [[
+                settingValue,
+                row[2] || '', // 설명 유지
+                new Date().toISOString().replace('T', ' ').substring(0, 19) // 수정일시 업데이트
+              ]]
+            }
+          });
+
+          console.log(`✅ 설정 업데이트: ${settingName} = ${settingValue}`);
+          return true;
+        }
+      }
+
+      console.warn(`⚠️ 설정을 찾을 수 없음: ${settingName}`);
+      return false;
+      
+    } catch (error) {
+      console.error(`❌ 설정값 업데이트 실패 (${settingName}):`, error);
+      return false;
     }
   }
 }

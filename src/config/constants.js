@@ -60,6 +60,7 @@ const SHEET_CONFIG = {
     CHARACTERS: '보탐봇-캐릭터정보',
     ACCOUNTS: '보탐봇-계정정보', 
     PARTICIPATIONS: '보탐봇-참여이력',
+    SETTINGS: '보탐봇-설정',
     
     // 레거시 시트들 (호환성 유지)
     MEMBERS_LEGACY: '보탐봇-길드원정보_백업',
@@ -77,6 +78,7 @@ const SHEET_CONFIG = {
     '보탐봇-캐릭터정보',    // CHARACTERS
     '보탐봇-계정정보',      // ACCOUNTS
     '보탐봇-참여이력',      // PARTICIPATIONS
+    '보탐봇-설정',          // SETTINGS
   ],
   
   // 컬럼 인덱스 (0부터 시작)
@@ -123,6 +125,14 @@ const SHEET_CONFIG = {
       BOSS_NAME: 4,
       EARNED_SCORE: 5,
       CUT_TIME: 6,
+    },
+    
+    // 설정 시트
+    SETTINGS: {
+      SETTING_NAME: 0,
+      SETTING_VALUE: 1,
+      DESCRIPTION: 2,
+      UPDATED_AT: 3,
     },
     
     // 레거시 시트들 (호환성)

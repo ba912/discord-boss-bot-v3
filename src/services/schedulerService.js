@@ -1,5 +1,6 @@
 const cron = require('node-cron');
 const { bossScheduleService } = require('./bossScheduleService');
+const { voiceChannelService } = require('./voiceChannelService');
 
 /**
  * 보스 알림 스케줄러 서비스
@@ -9,13 +10,20 @@ class SchedulerService {
   constructor() {
     this.client = null;
     this.notificationChannelId = null;
+    this.voiceChannelId = process.env.TTS_VOICE_CHANNEL_ID || null;
     this.isRunning = false;
     this.task = null;
+    this.ttsEnabled = process.env.TTS_PROVIDER && this.voiceChannelId;
     
     // 알림 중복 방지용 캐시 (키: '보스명_리젠시간_알림타입', 값: 발송시간)
     this.notificationCache = new Map();
     
     console.log('✅ SchedulerService 초기화 완료');
+    if (this.ttsEnabled) {
+      console.log(`🎵 TTS 기능 활성화: ${process.env.TTS_PROVIDER} (채널: ${this.voiceChannelId})`);
+    } else {
+      console.log('🔇 TTS 기능 비활성화 (환경 변수 미설정)');
+    }
   }
 
   /**
@@ -176,7 +184,7 @@ class SchedulerService {
   }
 
   /**
-   * Discord 채널로 알림 메시지 발송
+   * Discord 채널로 알림 메시지 발송 (텍스트 + TTS)
    * @param {string} bossName - 보스명
    * @param {string} notificationType - 알림 타입 ('5분전' | '1분전')
    * @returns {boolean} 발송 성공 여부
@@ -192,14 +200,17 @@ class SchedulerService {
 
       let messageContent;
       let components = [];
+      let ttsTemplate = null;
 
       if (notificationType === '5분전') {
-        // 5분전: 단순 메시지
+        // 5분전: 단순 메시지 + TTS
         messageContent = `${bossName} 5분전`;
+        ttsTemplate = 'boss5MinWarning';
         
       } else if (notificationType === '1분전') {
-        // 1분전: 컷 버튼 포함
+        // 1분전: 컷 버튼 포함 + TTS
         messageContent = `${bossName} 1분전`;
+        ttsTemplate = 'boss1MinWarning';
         
         components = [{
           type: 1, // ACTION_ROW
@@ -220,12 +231,67 @@ class SchedulerService {
         messageOptions.components = components;
       }
 
+      // 텍스트 메시지 발송
       await channel.send(messageOptions);
+
+      // TTS 음성 알림 발송 (비동기로 처리)
+      if (this.ttsEnabled && ttsTemplate) {
+        this.sendTTSNotification(bossName, ttsTemplate).catch(error => {
+          console.warn(`[스케줄러] TTS 알림 실패 (${bossName} ${notificationType}):`, error.message);
+        });
+      }
+
       return true;
 
     } catch (error) {
       console.error(`[스케줄러] 메시지 발송 오류:`, error);
       return false;
+    }
+  }
+
+  /**
+   * TTS 음성 알림 발송
+   * @param {string} bossName - 보스명
+   * @param {string} ttsTemplate - TTS 템플릿 이름
+   */
+  async sendTTSNotification(bossName, ttsTemplate) {
+    if (!this.ttsEnabled) {
+      return;
+    }
+
+    try {
+      console.log(`🎵 [TTS] 음성 알림 시작: ${bossName} (${ttsTemplate})`);
+
+      // 음성 채널 가져오기
+      const voiceChannel = await this.client.channels.fetch(this.voiceChannelId);
+      
+      if (!voiceChannel || voiceChannel.type !== 2) { // 2 = GUILD_VOICE
+        console.error(`[TTS] 음성 채널을 찾을 수 없음: ${this.voiceChannelId}`);
+        return;
+      }
+
+      // 음성 채널 연결
+      const connected = await voiceChannelService.joinChannel(voiceChannel);
+      
+      if (!connected) {
+        console.error(`[TTS] 음성 채널 연결 실패: ${voiceChannel.name}`);
+        return;
+      }
+
+      // TTS 템플릿으로 음성 재생
+      const playSuccess = await voiceChannelService.playTTSTemplate(ttsTemplate, [bossName]);
+      
+      if (playSuccess) {
+        console.log(`✅ [TTS] 음성 알림 완료: ${bossName}`);
+        
+        // 5분 후 자동 퇴장 타이머 설정
+        voiceChannelService.setAutoLeaveTimer();
+      } else {
+        console.error(`[TTS] 음성 재생 실패: ${bossName}`);
+      }
+
+    } catch (error) {
+      console.error(`[TTS] 음성 알림 오류:`, error);
     }
   }
 
@@ -256,8 +322,12 @@ class SchedulerService {
     return {
       isRunning: this.isRunning,
       channelId: this.notificationChannelId,
+      voiceChannelId: this.voiceChannelId,
+      ttsEnabled: this.ttsEnabled,
+      ttsProvider: process.env.TTS_PROVIDER || null,
       cacheSize: this.notificationCache.size,
-      client: !!this.client
+      client: !!this.client,
+      voiceStatus: voiceChannelService.getStatus()
     };
   }
 }

@@ -17,17 +17,31 @@ class GoogleSheetsService {
     }
 
     try {
-      // 서비스 계정 JSON 파일 경로 설정
-      const serviceAccountPath = this.serviceAccountPath || path.join(__dirname, '..', '..', 'service-account-key.json');
-      
-      // JWT 인증 클라이언트 생성
-      this.auth = new google.auth.GoogleAuth({
-        keyFile: serviceAccountPath,
+      let authConfig = {
         scopes: [
           'https://www.googleapis.com/auth/spreadsheets',
           'https://www.googleapis.com/auth/drive.file',
         ],
-      });
+      };
+
+      // 환경변수에 JSON 내용이 있으면 우선 사용 (클라우드 배포용)
+      if (process.env.GOOGLE_SERVICE_ACCOUNT_JSON) {
+        try {
+          authConfig.credentials = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON);
+          console.log('✅ Google Service Account 인증: 환경변수 JSON 사용');
+        } catch (error) {
+          console.error('❌ GOOGLE_SERVICE_ACCOUNT_JSON 파싱 실패:', error.message);
+          throw new Error('환경변수 GOOGLE_SERVICE_ACCOUNT_JSON이 올바른 JSON 형식이 아닙니다.');
+        }
+      } else {
+        // 파일 방식 (로컬 개발용)
+        const serviceAccountPath = this.serviceAccountPath || path.join(__dirname, '..', '..', 'service-account-key.json');
+        authConfig.keyFile = serviceAccountPath;
+        console.log('✅ Google Service Account 인증: 파일 경로 사용 -', serviceAccountPath);
+      }
+      
+      // JWT 인증 클라이언트 생성
+      this.auth = new google.auth.GoogleAuth(authConfig);
 
       // Sheets API 클라이언트 생성
       this.sheets = google.sheets({ 

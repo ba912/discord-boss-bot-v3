@@ -1,11 +1,11 @@
-const { 
-  joinVoiceChannel, 
-  createAudioPlayer, 
-  createAudioResource, 
-  AudioPlayerStatus, 
-  VoiceConnectionStatus,
-  entersState
-} = require('@discordjs/voice');
+let DiscordVoice;
+try {
+  DiscordVoice = require('@discordjs/voice');
+} catch (error) {
+  console.warn('⚠️ @discordjs/voice 패키지를 찾을 수 없습니다. TTS 기능이 비활성화됩니다.');
+  DiscordVoice = null;
+}
+
 const fs = require('fs');
 
 /**
@@ -19,14 +19,22 @@ class VoiceChannelService {
     this.currentChannel = null;
     this.isPlaying = false;
     this.queue = []; // 재생 대기열
+    this.isAvailable = DiscordVoice !== null;
     
-    this.initializeAudioPlayer();
+    if (this.isAvailable) {
+      this.initializeAudioPlayer();
+    } else {
+      console.warn('🔇 TTS 서비스가 비활성화되었습니다 (음성 패키지 없음)');
+    }
   }
 
   /**
    * 오디오 플레이어 초기화
    */
   initializeAudioPlayer() {
+    if (!this.isAvailable) return;
+    
+    const { createAudioPlayer, AudioPlayerStatus } = DiscordVoice;
     this.audioPlayer = createAudioPlayer();
 
     // 오디오 플레이어 이벤트 처리
@@ -56,8 +64,15 @@ class VoiceChannelService {
    * @returns {Promise<boolean>} 연결 성공 여부
    */
   async joinChannel(voiceChannel) {
+    if (!this.isAvailable) {
+      console.warn('🔇 [Voice] 음성 기능이 비활성화되어 있습니다');
+      return false;
+    }
+
     try {
       console.log(`🎵 [Voice] 음성 채널 연결 시도: ${voiceChannel.name}`);
+
+      const { joinVoiceChannel, VoiceConnectionStatus, entersState } = DiscordVoice;
 
       // 이미 같은 채널에 연결되어 있으면 스킵
       if (this.connection && this.currentChannel?.id === voiceChannel.id) {
@@ -199,7 +214,10 @@ class VoiceChannelService {
    * 개별 오디오 아이템 재생
    */
   async playAudioItem(audioItem) {
+    if (!this.isAvailable) return;
+
     try {
+      const { createAudioResource } = DiscordVoice;
       const { filePath, options } = audioItem;
       
       console.log(`🎵 [Voice] 오디오 재생: ${filePath.split('/').pop()}`);

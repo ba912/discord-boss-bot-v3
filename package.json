@@ -20,19 +20,21 @@
     "node": ">=18.0.0"
   },
   "dependencies": {
+    "axios": "^1.11.0",
+    "discord.js": "^14.22.1",
+    "dotenv": "^17.2.2",
+    "googleapis": "^159.0.0",
+    "node-cron": "^3.0.3",
+    "uuid": "^12.0.0",
+    "ws": "^8.18.3"
+  },
+  "optionalDependencies": {
     "@discordjs/opus": "^0.10.0",
     "@discordjs/voice": "^0.19.0",
     "@google-cloud/text-to-speech": "^6.3.0",
     "@snazzah/davey": "^0.1.6",
-    "axios": "^1.11.0",
-    "discord.js": "^14.22.1",
-    "dotenv": "^17.2.2",
     "ffmpeg-static": "^5.2.0",
-    "googleapis": "^159.0.0",
-    "node-cron": "^3.0.3",
-    "prism-media": "^1.3.5",
-    "uuid": "^12.0.0",
-    "ws": "^8.18.3"
+    "prism-media": "^1.3.5"
   },
   "devDependencies": {
     "eslint": "^8.57.0",

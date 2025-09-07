@@ -1,5 +1,6 @@
 const characterService = require('../../../services/characterService');
 const { bossService } = require('../../../services/bossService');
+const googleSheetsService = require('../../../services/googleSheetsService');
 const { MessageFlags } = require('discord.js');
 
 // 동시 참여 처리를 위한 뮤텍스 (메모리 기반)
@@ -38,6 +39,27 @@ module.exports = {
       if (!bossInfo || !bossInfo.cutTime) {
         return await interaction.editReply({
           content: `❌ ${bossName}의 컷타임이 설정되지 않았습니다.`
+        });
+      }
+
+      // 참여 제한 시간 체크 (설정 시트에서 값 조회)
+      const participationTimeLimitMinutes = await googleSheetsService.getSettingValue('참여 제한 시간(분)');
+      const timeLimitMinutes = parseInt(participationTimeLimitMinutes) || 120; // 기본값 120분
+      
+      console.log(`[참여버튼] 참여 제한 시간: ${timeLimitMinutes}분`);
+      
+      // 컷타임과 현재 시간 비교
+      const cutTime = new Date(bossInfo.cutTime);
+      const currentTime = new Date();
+      const timeSinceCutMinutes = Math.floor((currentTime - cutTime) / (1000 * 60));
+      
+      console.log(`[참여버튼] 컷타임: ${cutTime.toLocaleString('ko-KR')}`);
+      console.log(`[참여버튼] 현재시간: ${currentTime.toLocaleString('ko-KR')}`);
+      console.log(`[참여버튼] 컷타임으로부터 경과시간: ${timeSinceCutMinutes}분`);
+      
+      if (timeSinceCutMinutes > timeLimitMinutes) {
+        return await interaction.editReply({
+          content: `❌ 참여 시간이 만료되었습니다.\n컷타임으로부터 ${timeLimitMinutes}분 이내에만 참여 가능합니다.\n(현재 ${timeSinceCutMinutes}분 경과)`
         });
       }
 

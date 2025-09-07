@@ -59,6 +59,14 @@ class MessageHandler {
     const command = this.commands.get(commandName);
     if (!command) return;
 
+    // 채널 제한 확인 (NOTIFICATION_CHANNEL_ID에서만 명령어 실행 가능)
+    const allowedChannelId = process.env.NOTIFICATION_CHANNEL_ID;
+    if (allowedChannelId && message.channel.id !== allowedChannelId) {
+      // 허용된 채널이 아니면 조용히 무시 (스팸 방지)
+      console.log(`🚫 [${message.author.tag}] 허용되지 않은 채널에서 명령어 시도: ${commandName} (채널: ${message.channel.name})`);
+      return;
+    }
+
     // 쿨다운 체크 (기본 3초)
     const now = Date.now();
     const cooldownKey = `${message.author.id}-${commandName}`;

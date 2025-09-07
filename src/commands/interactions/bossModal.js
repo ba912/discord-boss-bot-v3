@@ -186,8 +186,8 @@ module.exports = {
           const daysStr = parts[0];
           const time = parts[1];
           
-          // 시간 형식 검증
-          if (!/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/.test(time)) {
+          // 시간 형식 검증 (HH:MM 형식)
+          if (!/^([0-1]?[0-9]|2[0-3]):([0-5][0-9])$/.test(time)) {
             return interaction.reply({
               content: '❌ 시간은 HH:MM 형식으로 입력해주세요. (예: 21:00)',
               flags: MessageFlags.Ephemeral

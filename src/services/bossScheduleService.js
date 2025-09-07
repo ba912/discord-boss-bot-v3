@@ -7,27 +7,29 @@ class BossScheduleService {
   calculateNextRegen(boss) {
     const now = new Date();
     
-    // 컷타임이 없으면 계산 불가능
-    if (!boss.cutTime) {
-      return {
-        hasSchedule: false,
-        message: '미등록'
-      };
-    }
-    
-    const cutTime = new Date(boss.cutTime);
-    
-    // 컷타임이 유효하지 않으면 계산 불가능
-    if (isNaN(cutTime.getTime())) {
-      return {
-        hasSchedule: false,
-        message: '미등록'
-      };
-    }
-    
     if (boss.regenType === '시간마다') {
+      // 시간마다 리젠은 컷타임이 필요함
+      if (!boss.cutTime) {
+        return {
+          hasSchedule: false,
+          message: '미등록'
+        };
+      }
+      
+      const cutTime = new Date(boss.cutTime);
+      
+      // 컷타임이 유효하지 않으면 계산 불가능
+      if (isNaN(cutTime.getTime())) {
+        return {
+          hasSchedule: false,
+          message: '미등록'
+        };
+      }
+      
       return this.calculateHourlyRegen(cutTime, boss.regenSettings, now);
+      
     } else if (boss.regenType === '특정요일') {
+      // 특정요일 리젠은 컷타임 없이도 계산 가능
       return this.calculateWeeklyRegen(boss.regenSettings, now);
     }
     
@@ -270,8 +272,9 @@ class BossScheduleService {
       
       // 시간과 보스명 출력
       daySchedules.forEach(item => {
-        const paddedTime = item.timeStr.padEnd(8, ' ');
-        message += `${paddedTime}${item.bossName}\n`;
+        // const paddedTime = item.timeStr.padEnd(8, ' ');
+        // message += `${paddedTime}${item.bossName}\n`;
+        message += `${item.timeStr}\t${item.bossName}\n`;
       });
     });
 

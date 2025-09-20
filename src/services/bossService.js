@@ -196,41 +196,94 @@ const deleteBoss = async (bossName) => {
   }
 };
 
-// 한글 글자 수를 고려한 패딩 함수
-const padKoreanString = (str, length) => {
-  let realLength = 0;
+// 더 정확한 문자 폭 계산 (Discord 고정폭 폰트 기준)
+const getDisplayWidth = (str) => {
+  let width = 0;
   for (let i = 0; i < str.length; i++) {
-    // 한글, 중국어, 일본어 등은 2칸, 나머지는 1칸으로 계산
-    if (str.charCodeAt(i) > 127) {
-      realLength += 2;
-    } else {
-      realLength += 1;
+    const char = str[i];
+    const code = str.charCodeAt(i);
+
+    // 한글 (가-힣)
+    if (code >= 0xAC00 && code <= 0xD7AF) {
+      width += 2;
+    }
+    // 기타 전각 문자 (중국어, 일본어 등)
+    else if (code > 127) {
+      width += 2;
+    }
+    // 영문, 숫자, 특수문자, 공백
+    else {
+      width += 1;
     }
   }
-  
-  const padding = Math.max(0, length - realLength);
-  return str + ' '.repeat(padding);
+  return width;
+};
+
+// Discord용 실제 폭 계산 (모든 전각 문자=2, 반각 문자=1)
+const getDiscordWidth = (str) => {
+  let width = 0;
+  for (let i = 0; i < str.length; i++) {
+    const code = str.charCodeAt(i);
+    // 전각 문자 (한글, 전각 공백 등)
+    if (code > 127) {
+      width += 2;
+    }
+    // 반각 문자 (영문/숫자/특수문자)
+    else {
+      width += 1;
+    }
+  }
+  return width;
+};
+
+// 전각 공백을 사용한 패딩 함수
+const padWithFullWidth = (str, targetWidth) => {
+  const fullWidthSpace = "　"; // U+3000
+  const currentWidth = getDiscordWidth(str);
+  const diff = targetWidth - currentWidth;
+
+  if (diff <= 0) return str;
+
+  // 전각 공백(2폭)과 반각 공백(1폭) 조합으로 정확한 패딩
+  const fullWidthSpaces = Math.floor(diff / 2);
+  const halfWidthSpaces = diff % 2;
+
+  return str + fullWidthSpace.repeat(fullWidthSpaces) + ' '.repeat(halfWidthSpaces);
 };
 
 // 보스 목록을 Discord 메시지 형태로 포맷
-const formatBossListForDiscord = (bossList, includeHidden = false) => {
+const formatBossListForDiscord = (bossList) => {
   if (!bossList || bossList.length === 0) {
     return '등록된 보스가 없습니다.';
   }
-  
-  let message = '**보스목록**\n```\n';
-  
-  bossList.forEach((boss) => {
-    // 한글 고려하여 패딩: 보스명 20칸, 리젠정보 25칸
-    const name = padKoreanString(boss.name, 20);
-    const regen = padKoreanString(boss.regenDisplay, 25);
-    const visibility = boss.scheduleVisible;
-    
-    message += `${name} ${regen} ${visibility}\n`;
-  });
-  
-  message += '```';
-  
+
+  // 데이터 구성 (띄어쓰기를 전각 공백으로 치환)
+  const data = bossList.map(boss => [
+    boss.name.replace(/ /g, '　'),
+    boss.regenDisplay.replace(/ /g, '　'),
+    boss.scheduleVisible.replace(/ /g, '　')
+  ]);
+
+  // 각 열의 최대 폭 계산 + 여유 공간 추가
+  const colWidths = [0, 0, 0];
+  for (const row of data) {
+    row.forEach((cell, i) => {
+      colWidths[i] = Math.max(colWidths[i], getDiscordWidth(cell));
+    });
+  }
+
+  // 각 열에 여유 공간 10폭(전각 공백 5개) 추가
+  colWidths[0] += 10;
+  colWidths[1] += 10;
+  colWidths[2] += 10;
+
+  let message = '**보스목록**\n```';
+  for (const row of data) {
+    const line = row.map((cell, i) => padWithFullWidth(cell, colWidths[i])).join("　"); // 열 간격 전각 공백
+    message += '\n' + line;
+  }
+  message += '\n```';
+
   return message;
 };
 

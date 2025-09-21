@@ -6,6 +6,11 @@ const { SHEET_CONFIG } = require('../config/constants');
  * 부주 시스템을 지원하는 캐릭터 관리 기능을 제공합니다
  */
 class CharacterService {
+  constructor() {
+    // 점수 랭킹 캐시 (5분 유지)
+    this.rankingCache = new Map();
+    this.cacheTimeout = 5 * 60 * 1000; // 5분
+  }
   
   // ========================================
   // 캐릭터 조회 기능
@@ -820,6 +825,203 @@ class CharacterService {
       fields: fields,
       timestamp: new Date().toISOString(),
     };
+  }
+
+  // ========================================
+  // 랭킹 시스템
+  // ========================================
+
+  /**
+   * 전체 캐릭터 점수 랭킹 조회 (시즌 필터링 지원, 캐싱 적용)
+   * @returns {Promise<{ranking: Array, fromCache: boolean, cacheAge: number}>} 랭킹 데이터와 캐시 정보
+   */
+  async getScoreRanking() {
+    try {
+      // 시즌 시작일 조회
+      const seasonStartDate = await googleSheetsService.getSettingValue('점수_집계_시작일');
+
+      // 캐시 키 생성
+      const cacheKey = seasonStartDate ? `season_${seasonStartDate}` : 'all_time';
+
+      // 캐시 확인
+      const cached = this.rankingCache.get(cacheKey);
+      if (cached && Date.now() - cached.timestamp < this.cacheTimeout) {
+        const cacheAge = Math.floor((Date.now() - cached.timestamp) / 1000);
+        console.log(`[점수랭킹] 캐시에서 조회: ${cacheAge}초 전 데이터`);
+        return {
+          ranking: cached.data,
+          fromCache: true,
+          cacheAge: cacheAge
+        };
+      }
+
+      // 캐시 미스 - 새로 계산
+      console.log(`[점수랭킹] 새로 계산 시작`);
+      let ranking;
+
+      if (seasonStartDate) {
+        // 시즌 필터링: 참여이력 기반 집계
+        ranking = await this.getSeasonRanking(seasonStartDate);
+      } else {
+        // 기존 방식: 캐릭터정보 시트의 총점수 사용
+        ranking = await this.getAllTimeRanking();
+      }
+
+      // 캐시에 저장
+      this.rankingCache.set(cacheKey, {
+        data: ranking,
+        timestamp: Date.now()
+      });
+
+      console.log(`[점수랭킹] 새 데이터 캐시 저장 완료`);
+
+      return {
+        ranking: ranking,
+        fromCache: false,
+        cacheAge: 0
+      };
+
+    } catch (error) {
+      console.error('❌ 점수 랭킹 조회 실패:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * 전체 기간 랭킹 (캐릭터정보 시트 기반)
+   * @returns {Promise<Array>} 랭킹 데이터 배열
+   */
+  async getAllTimeRanking() {
+    const charactersResult = await googleSheetsService.getData(SHEET_CONFIG.SHEET_NAMES.CHARACTERS);
+    if (!charactersResult.success) {
+      throw new Error('캐릭터 데이터 조회 실패');
+    }
+
+    // 캐릭터 데이터 변환 및 정렬
+    const rankingData = charactersResult.data
+      .map(row => ({
+        characterId: row[0],
+        characterName: row[1],
+        totalScore: parseInt(row[2]) || 0
+      }))
+      .filter(character => character.totalScore >= 0) // 유효한 점수만
+      .sort((a, b) => b.totalScore - a.totalScore); // 점수 내림차순
+
+    // 1위 점수 기준으로 참여율 계산
+    const topScore = rankingData.length > 0 ? rankingData[0].totalScore : 0;
+
+    // 순위와 참여율 추가
+    const ranking = rankingData.map((character, index) => ({
+      rank: index + 1,
+      characterName: character.characterName,
+      totalScore: character.totalScore,
+      participationRate: topScore > 0 ? (character.totalScore / topScore * 100) : 0
+    }));
+
+    return ranking;
+  }
+
+  /**
+   * 시즌 랭킹 (참여이력 기반 집계)
+   * @param {string} seasonStartDate - 시즌 시작일 (YYYY-MM-DD HH:MM:SS)
+   * @returns {Promise<Array>} 랭킹 데이터 배열
+   */
+  async getSeasonRanking(seasonStartDate) {
+    console.log(`[시즌랭킹] 시작일: ${seasonStartDate}`);
+
+    // 참여이력 조회
+    const participationsResult = await googleSheetsService.getData(SHEET_CONFIG.SHEET_NAMES.PARTICIPATIONS);
+    if (!participationsResult.success) {
+      throw new Error('참여이력 데이터 조회 실패');
+    }
+
+    console.log(`[시즌랭킹] 참여이력 데이터 수: ${participationsResult.data.length}`);
+
+    // 캐릭터정보 조회 (캐릭터명 매핑용)
+    const charactersResult = await googleSheetsService.getData(SHEET_CONFIG.SHEET_NAMES.CHARACTERS);
+    if (!charactersResult.success) {
+      throw new Error('캐릭터 데이터 조회 실패');
+    }
+
+    // 캐릭터 ID -> 이름 매핑 생성
+    const characterMap = new Map();
+    charactersResult.data.forEach(row => {
+      characterMap.set(row[0], row[1]); // ID -> 캐릭터명
+    });
+
+    // 시즌 시작일 이후 참여 기록 필터링 및 집계
+    const seasonStart = new Date(seasonStartDate);
+    const scoreMap = new Map(); // 캐릭터ID -> 총점수
+    let filteredCount = 0;
+
+    console.log(`[시즌랭킹] 필터 기준일: ${seasonStart}`);
+
+    participationsResult.data.forEach(row => {
+      // 실제 데이터 구조: [참여일시, 캐릭터ID, 캐릭터명, 실제참여자ID, 보스명, 점수, 컷타임]
+      const [participationTime, characterId, characterName, actualParticipantId, bossName, earnedScore, cutTime] = row;
+      const participationDate = new Date(participationTime);
+
+      // 시즌 시작일 이후 기록만 집계
+      if (participationDate >= seasonStart) {
+        const score = parseInt(earnedScore) || 0;
+        const currentScore = scoreMap.get(characterId) || 0;
+        scoreMap.set(characterId, currentScore + score);
+        filteredCount++;
+        console.log(`[시즌랭킹] 집계: ${characterName} +${score}점 (${participationTime})`);
+      }
+    });
+
+    console.log(`[시즌랭킹] 필터된 기록 수: ${filteredCount}`);
+
+    // 랭킹 데이터 생성
+    const rankingData = [];
+    for (const [characterId, totalScore] of scoreMap) {
+      const characterName = characterMap.get(characterId);
+      if (characterName && totalScore > 0) {
+        rankingData.push({
+          characterId,
+          characterName,
+          totalScore
+        });
+      }
+    }
+
+    // 점수 내림차순 정렬
+    rankingData.sort((a, b) => b.totalScore - a.totalScore);
+
+    // 1위 점수 기준으로 참여율 계산
+    const topScore = rankingData.length > 0 ? rankingData[0].totalScore : 0;
+
+    // 순위와 참여율 추가
+    const ranking = rankingData.map((character, index) => ({
+      rank: index + 1,
+      characterName: character.characterName,
+      totalScore: character.totalScore,
+      participationRate: topScore > 0 ? (character.totalScore / topScore * 100) : 0
+    }));
+
+    return ranking;
+  }
+
+  /**
+   * 점수 랭킹 캐시 강제 갱신
+   */
+  clearRankingCache() {
+    this.rankingCache.clear();
+    console.log('[점수랭킹] 캐시 초기화 완료');
+  }
+
+  /**
+   * 만료된 캐시 정리
+   */
+  cleanupExpiredCache() {
+    const now = Date.now();
+    for (const [key, value] of this.rankingCache) {
+      if (now - value.timestamp >= this.cacheTimeout) {
+        this.rankingCache.delete(key);
+        console.log(`[점수랭킹] 만료된 캐시 삭제: ${key}`);
+      }
+    }
   }
 }
 

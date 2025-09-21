@@ -30,10 +30,27 @@ module.exports = {
         return processingMessage.edit('등록된 보스가 없습니다.');
       }
 
-      // Discord 메시지 형태로 포맷
-      const formattedList = bossService.formatBossListForDiscord(bossList, isStaff);
+      // Discord 메시지 형태로 포맷 (스마트 분할 지원)
+      const result = bossService.formatBossListForDiscord(bossList);
 
-      await processingMessage.edit(formattedList);
+      if (result.needsSplit) {
+        // 분할이 필요한 경우
+        const headerMessage = `**보스목록** (총 ${result.totalBosses}개)\n\n글자수 제한때문에 메시지를 ${result.totalChunks}개로 나눠서 보내드릴게요.`;
+        await processingMessage.edit(headerMessage);
+
+        // 각 분할 메시지를 순차적으로 전송
+        for (let i = 0; i < result.chunks.length; i++) {
+          await message.channel.send(result.chunks[i]);
+
+          // 연속 전송 시 너무 빠르지 않도록 약간의 딜레이
+          if (i < result.chunks.length - 1) {
+            await new Promise(resolve => setTimeout(resolve, 300));
+          }
+        }
+      } else {
+        // 분할이 필요없는 경우 (기존 방식)
+        await processingMessage.edit(result.content);
+      }
 
     } catch (error) {
       console.error('[보스목록] 오류:', error);

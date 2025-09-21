@@ -251,12 +251,33 @@ const padWithFullWidth = (str, targetWidth) => {
   return str + fullWidthSpace.repeat(fullWidthSpaces) + ' '.repeat(halfWidthSpaces);
 };
 
-// 보스 목록을 Discord 메시지 형태로 포맷
+// 보스 목록을 Discord 메시지 형태로 포맷 (스마트 분할 지원)
 const formatBossListForDiscord = (bossList) => {
   if (!bossList || bossList.length === 0) {
-    return '등록된 보스가 없습니다.';
+    return { needsSplit: false, content: '등록된 보스가 없습니다.' };
   }
 
+  // 1. 전체 메시지를 먼저 생성해서 길이 체크
+  const fullMessage = generateBossListMessage(bossList);
+
+  // 2. Discord 2000자 제한 체크
+  if (fullMessage.length <= 2000) {
+    // 2000자 이하면 기존 방식 (단일 메시지)
+    return { needsSplit: false, content: fullMessage };
+  }
+
+  // 3. 2000자 초과하면 분할 필요
+  const chunks = splitBossListIntoChunks(bossList);
+  return {
+    needsSplit: true,
+    totalBosses: bossList.length,
+    totalChunks: chunks.length,
+    chunks: chunks
+  };
+};
+
+// 전체 보스 목록 메시지 생성 (기존 로직)
+const generateBossListMessage = (bossList) => {
   // 데이터 구성 (띄어쓰기를 전각 공백으로 치환)
   const data = bossList.map(boss => [
     boss.name.replace(/ /g, '　'),
@@ -285,6 +306,39 @@ const formatBossListForDiscord = (bossList) => {
   message += '\n```';
 
   return message;
+};
+
+// 보스 목록을 여러 청크로 분할 (더 정확한 방법)
+const splitBossListIntoChunks = (bossList) => {
+  const maxLength = 1900; // 안전 마진
+  const chunks = [];
+  let currentChunk = [];
+
+  for (const boss of bossList) {
+    // 현재 청크에 이 보스를 추가했을 때의 메시지 생성해보기
+    const testChunk = [...currentChunk, boss];
+    const testMessage = generateBossListMessage(testChunk).replace('**보스목록**', '**보스목록 (1/1 페이지)**');
+
+    // 길이가 초과하면 현재 청크를 완료하고 새 청크 시작
+    if (testMessage.length > maxLength && currentChunk.length > 0) {
+      chunks.push(currentChunk);
+      currentChunk = [boss];
+    } else {
+      currentChunk.push(boss);
+    }
+  }
+
+  // 마지막 청크 추가
+  if (currentChunk.length > 0) {
+    chunks.push(currentChunk);
+  }
+
+  // 각 청크를 메시지로 변환
+  return chunks.map((chunk, index) => {
+    const pageInfo = `**보스목록 (${index + 1}/${chunks.length} 페이지)**`;
+    const chunkMessage = generateBossListMessage(chunk);
+    return chunkMessage.replace('**보스목록**', pageInfo);
+  });
 };
 
 // 보스 상세 정보를 Discord 메시지 형태로 포맷

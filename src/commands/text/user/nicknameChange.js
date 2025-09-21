@@ -1,46 +1,125 @@
 const characterService = require('../../../services/characterService');
 const { getUserPermissionFromSheet } = require('../../../utils/permissions');
+const userLockManager = require('../../../utils/userLockManager');
 
 module.exports = {
   name: 'nicknamechange',
   aliases: ['닉네임변경', '닉변'],
-  description: '캐릭터명을 변경합니다 (연결된 모든 계정에 동기화)',
+  description: '캐릭터명을 변경합니다 (미등록 사용자는 자동 가입)',
   usage: '!닉네임변경 <새로운캐릭터명>',
   cooldown: 10, // 10초 쿨다운 (시트 업데이트 작업이므로)
   
   async execute(message, args) {
+    const userId = message.author.id;
+
+    // 동시성 보호: 사용자별 잠금 확인
+    if (!userLockManager.acquireLock(userId, 'nicknamechange')) {
+      const lockInfo = userLockManager.getLockInfo(userId);
+      return await message.reply(
+        `⏳ 이미 **${lockInfo.command}** 명령어를 처리하고 있습니다.\n` +
+        `${lockInfo.remainingSeconds}초 후 다시 시도해주세요.`
+      );
+    }
+
     // 즉시 처리 중 메시지 표시
     const processingMessage = await message.reply('⏳ 캐릭터명을 변경하는 중...');
-    
+
     try {
       // 1. 입력 검증
       if (args.length === 0) {
-        return processingMessage.edit('❌ 새로운 캐릭터명을 입력해주세요.\n**사용법:** `!닉네임변경 <새로운캐릭터명>`');
+        await processingMessage.edit('❌ 새로운 캐릭터명을 입력해주세요.\n**사용법:** `!닉네임변경 <새로운캐릭터명>`');
+        return;
       }
 
       const newCharacterName = args.join(' ').trim();
-      
+
       // 2. 캐릭터명 유효성 검사
       const nameValidation = await characterService.validateCharacterName(newCharacterName);
       if (!nameValidation.valid) {
-        return processingMessage.edit(`❌ ${nameValidation.error}`);
+        await processingMessage.edit(`❌ ${nameValidation.error}`);
+        return;
       }
 
-      // 3. 사용자 권한 및 캐릭터 확인
+      // 3. 사용자 등록 상태 확인
       const userPermission = await getUserPermissionFromSheet(message.author.id);
-      if (!userPermission) {
-        return processingMessage.edit('❌ 시트에 등록되지 않은 사용자입니다. 관리자에게 문의해주세요.');
-      }
-
-      // 4. 사용자의 현재 캐릭터 정보 조회
       const currentCharacter = await characterService.getCharacterByUserId(message.author.id);
-      if (!currentCharacter) {
-        return processingMessage.edit('❌ 캐릭터 정보를 찾을 수 없습니다. 관리자에게 문의해주세요.');
+
+      // 4. 등록되지 않은 사용자 자동 가입 처리
+      if (!userPermission || !currentCharacter) {
+        await processingMessage.edit('⏳ 새로운 사용자를 등록하는 중...');
+
+        const userId = message.author.id;
+        const discordNickname = message.author.displayName || message.author.username;
+        const discordTag = `${message.author.username}#${message.author.discriminator}`;
+
+        try {
+          // 자동 가입 실행 (새 캐릭터명으로 계정 생성)
+          const createResult = await characterService.createNewCharacter(
+            newCharacterName,
+            userId,
+            discordNickname,
+            discordTag,
+            '일반길드원' // 기본 권한
+          );
+
+          // 가입 완료 메시지
+          const welcomeEmbed = {
+            color: 0x00ff00,
+            title: '🎉 길드 가입 및 캐릭터 등록 완료!',
+            fields: [
+              {
+                name: '👤 Discord 사용자',
+                value: `**${discordNickname}** (${discordTag})`,
+                inline: true,
+              },
+              {
+                name: '🎮 등록된 캐릭터',
+                value: `**${newCharacterName}**`,
+                inline: true,
+              },
+              {
+                name: '👑 권한',
+                value: '**일반길드원**',
+                inline: true,
+              },
+              {
+                name: '📅 가입일시',
+                value: new Date().toLocaleString('ko-KR', { timeZone: 'Asia/Seoul' }),
+                inline: false,
+              }
+            ],
+            footer: {
+              text: '이제 모든 봇 기능을 사용할 수 있습니다!'
+            }
+          };
+
+          await processingMessage.edit({ content: null, embeds: [welcomeEmbed] });
+
+          // 로그 출력
+          console.log(`🎉 자동 가입: ${message.author.tag} (${userId}) - 캐릭터: "${newCharacterName}"`);
+          return;
+
+        } catch (error) {
+          console.error('[닉네임변경-자동가입] 오류:', error);
+
+          let errorMessage = '❌ 자동 가입 처리 중 오류가 발생했습니다.';
+
+          if (error.message.includes('이미 존재하는 캐릭터명')) {
+            errorMessage = `❌ **"${newCharacterName}"** 캐릭터명이 이미 존재합니다.\n다른 캐릭터명으로 시도해주세요.`;
+          } else if (error.message.includes('캐릭터명')) {
+            errorMessage = `❌ 캐릭터명이 올바르지 않습니다: ${error.message}`;
+          }
+
+          await processingMessage.edit(errorMessage);
+          return;
+        }
       }
 
-      // 5. 이미 같은 이름인지 확인
+      // 5. 기존 사용자의 닉네임 변경 처리
+      // 이미 같은 이름인지 확인
       if (currentCharacter.characterName === newCharacterName) {
-        return processingMessage.edit(`❌ 이미 "${newCharacterName}"으로 설정되어 있습니다.`);
+        await processingMessage.edit(`❌ 이미 "${newCharacterName}"으로 설정되어 있습니다.`);
+        return;
       }
 
       // 6. 중복된 캐릭터명 확인 (선택적 - 부주 개념상 허용할 수도 있음)
@@ -74,7 +153,8 @@ module.exports = {
           
         } catch (error) {
           // 시간 초과 또는 취소
-          return confirmMessage.edit('❌ 시간이 초과되어 캐릭터명 변경이 취소되었습니다.');
+          await confirmMessage.edit('❌ 시간이 초과되어 캐릭터명 변경이 취소되었습니다.');
+          return;
         }
       }
 
@@ -146,6 +226,9 @@ module.exports = {
       };
       
       await processingMessage.edit({ content: null, embeds: [errorEmbed] });
+    } finally {
+      // 동시성 보호: 사용자별 잠금 해제
+      userLockManager.releaseLock(userId);
     }
   },
 };

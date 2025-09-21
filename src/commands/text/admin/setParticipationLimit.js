@@ -7,7 +7,7 @@ const { checkSuperAdminCommandPermission } = require('../../../utils/permissions
 module.exports = {
   name: 'setparticipationlimit',
   aliases: ['참여제한설정'],
-  description: '보스 참여 제한 시간을 설정합니다 (분 단위)',
+  description: '보스 참여 제한 시간을 설정합니다 (분 단위, 0 이상)',
   usage: '!참여제한설정 <분>',
   cooldown: 5,
 
@@ -45,12 +45,12 @@ module.exports = {
 
       // 숫자 유효성 검증
       const limitMinutes = parseInt(limitArg);
-      if (isNaN(limitMinutes) || limitMinutes < 0 || limitMinutes > 60) {
-        return await processingMessage.edit('참여 제한 시간은 0-60분 사이의 숫자로 입력해주세요.');
+      if (isNaN(limitMinutes) || limitMinutes < 0) {
+        return await processingMessage.edit('참여 제한 시간은 0 이상의 숫자로 입력해주세요.');
       }
 
       // 설정값 저장
-      await googleSheetsService.updateSettingValue('참여제한(분)', limitMinutes.toString());
+      await googleSheetsService.updateSettingValue('참여 제한 시간(분)', limitMinutes.toString());
 
       // 성공 응답
       await processingMessage.edit(
@@ -76,7 +76,7 @@ module.exports = {
    */
   async getCurrentParticipationLimit() {
     try {
-      const limit = await googleSheetsService.getSettingValue('참여제한(분)');
+      const limit = await googleSheetsService.getSettingValue('참여 제한 시간(분)');
       return limit || null;
     } catch (error) {
       console.error('참여 제한 시간 조회 실패:', error);

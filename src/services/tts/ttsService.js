@@ -14,6 +14,8 @@ class TTSService {
     this.voiceTemplates = {
       boss5MinWarning: (bossName) => `${bossName} 리젠 5분 전입니다.`,
       boss1MinWarning: (bossName) => `${bossName} 리젠 1분 전입니다.`,
+      maintenanceMode5Min: () => '보스런 5분 전입니다.',
+      maintenanceMode1Min: () => '보스런 1분 전입니다.',
       eventWarning: (eventName, minutes) => `${eventName} ${minutes}분 전입니다.`,
       custom: (text) => text
     };

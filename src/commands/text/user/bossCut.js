@@ -1,5 +1,6 @@
 const { bossScheduleService } = require('../../../services/bossScheduleService');
 const { bossService } = require('../../../services/bossService');
+const maintenanceService = require('../../../services/maintenanceService');
 
 module.exports = {
   name: 'cut',
@@ -41,10 +42,29 @@ module.exports = {
       await bossService.updateBoss(bossName, { cutTime });
       console.log(`[컷] 구글시트 업데이트 완료: ${Date.now() - updateStart}ms`);
 
-      const successMessage = cutTime 
-        ? `✅ '${bossName}' 컷타임이 ${cutTime}로 설정되었습니다.`
-        : `✅ '${bossName}' 컷타임이 삭제되었습니다.`;
-      
+      // 점검 모드 자동 해제 체크 (컷타임이 등록된 경우에만)
+      let maintenanceDeactivated = false;
+      if (cutTime) {
+        const isMaintenanceActive = await maintenanceService.isMaintenanceModeActive();
+        if (isMaintenanceActive) {
+          try {
+            await maintenanceService.deactivateMaintenanceMode();
+            maintenanceDeactivated = true;
+            console.log(`[컷] 점검 모드 자동 해제됨 - 첫 컷: ${bossName}`);
+          } catch (error) {
+            console.error('[컷] 점검 모드 해제 실패:', error);
+          }
+        }
+      }
+
+      let successMessage = cutTime
+        ? `${bossName} 컷타임 설정 완료. ${cutTime}`
+        : `${bossName} 컷타임이 삭제되었습니다.`;
+
+      if (maintenanceDeactivated) {
+        successMessage += '\n점검 모드가 해제되었습니다.';
+      }
+
       await processingMessage.edit(successMessage);
       
       console.log(`[컷] 전체 처리 완료: ${Date.now() - startTime}ms`);

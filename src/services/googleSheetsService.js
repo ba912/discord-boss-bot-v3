@@ -2177,7 +2177,8 @@ class GoogleSheetsService {
       
       // 기본 설정 데이터
       const defaultSettings = [
-        ['참여 제한 시간(분)', '120', '보스 컷 후 참여 버튼을 활성화할 시간 (분 단위)', new Date().toISOString().replace('T', ' ').substring(0, 19)]
+        ['참여 제한 시간(분)', '120', '보스 컷 후 참여 버튼을 활성화할 시간 (분 단위)', new Date().toISOString().replace('T', ' ').substring(0, 19)],
+        ['점검모드_활성화여부', 'false', '점검 모드 활성화 상태 (true/false)', new Date().toISOString().replace('T', ' ').substring(0, 19)]
       ];
 
       // 데이터 추가
@@ -2264,8 +2265,27 @@ class GoogleSheetsService {
         }
       }
 
-      console.warn(`⚠️ 설정을 찾을 수 없음: ${settingName}`);
-      return false;
+      // 설정이 없으면 새로 추가
+      console.log(`📝 새 설정 추가: ${settingName} = ${settingValue}`);
+
+      const newSettingRow = [
+        settingName,
+        settingValue,
+        '', // 설명은 빈 값
+        new Date().toISOString().replace('T', ' ').substring(0, 19) // 생성일시
+      ];
+
+      await this.sheets.spreadsheets.values.append({
+        spreadsheetId: this.spreadsheetId,
+        range: `${SHEET_CONFIG.SHEET_NAMES.SETTINGS}!A:D`,
+        valueInputOption: 'USER_ENTERED',
+        resource: {
+          values: [newSettingRow]
+        }
+      });
+
+      console.log(`✅ 새 설정 추가 완료: ${settingName} = ${settingValue}`);
+      return true;
       
     } catch (error) {
       console.error(`❌ 설정값 업데이트 실패 (${settingName}):`, error);

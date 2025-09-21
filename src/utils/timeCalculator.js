@@ -94,8 +94,8 @@ const calculateCutTimeFromGen = (genTime, regenSettings) => {
 };
 
 /**
- * 점검 시간을 기준으로 다음 젠타임 계산 후 컷타임 역산
- * @param {Date} maintenanceTime - 점검 완료 시간
+ * 점검 시간을 기준으로 젠타임에서 컷타임 역산
+ * @param {Date} maintenanceTime - 점검 완료 시간 (젠타임)
  * @param {string} regenSettings - 리젠설정 JSON 문자열
  * @returns {string} 계산된 컷타임 (YYYY-MM-DD HH:MM:SS 형식)
  */
@@ -108,13 +108,12 @@ const calculateCutTimeFromMaintenance = (maintenanceTime, regenSettings) => {
       throw new Error('리젠시간 정보가 올바르지 않습니다.');
     }
 
-    // 점검 완료 시간을 첫 젠타임으로 설정
-    // (게임 점검 후 보스들이 새로 스폰되므로)
-    const firstGenTime = new Date(maintenanceTime);
+    // 점검 완료 시간을 젠타임으로 보고 컷타임 역산
+    // 젠타임 - 리젠시간 = 컷타임
+    const cutTimeMs = maintenanceTime.getTime() - (regenHours * 60 * 60 * 1000);
+    const cutTime = new Date(cutTimeMs);
 
-    // 점검 완료 시간 자체가 첫 컷타임이 됨
-    // (점검 직후 보스가 처음 스폰되므로 컷타임 = 점검완료시간)
-    return formatDateTime(firstGenTime);
+    return formatDateTime(cutTime);
 
   } catch (parseError) {
     throw new Error('리젠설정 파싱 오류: ' + parseError.message);

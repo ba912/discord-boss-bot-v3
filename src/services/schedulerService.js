@@ -108,11 +108,16 @@ class SchedulerService {
         // 점검 모드: 개별 텍스트 + 통합 음성 알림 처리
         notificationCount = await this.handleMaintenanceModeNotifications(result.schedules, currentTime);
       } else {
-        // 일반 모드: 개별 보스 알림 처리
-        for (const schedule of result.schedules) {
-          if (schedule.schedule.hasSchedule) {
-            const notified = await this.checkAndSendNotification(schedule, currentTime);
-            if (notified) notificationCount++;
+        // 일반 모드: 개별 보스 알림 처리 - API 레이트 리밋 방지를 위한 지연 추가
+        const validSchedules = result.schedules.filter(s => s.schedule.hasSchedule);
+        for (let i = 0; i < validSchedules.length; i++) {
+          const schedule = validSchedules[i];
+          const notified = await this.checkAndSendNotification(schedule, currentTime);
+          if (notified) notificationCount++;
+
+          // 다음 알림까지 200ms 지연 (레이트 리밋 방지)
+          if (i < validSchedules.length - 1) {
+            await new Promise(resolve => setTimeout(resolve, 200));
           }
         }
       }
@@ -166,10 +171,16 @@ class SchedulerService {
       // 통합 음성 알림 먼저 발송
       await this.sendMaintenanceTTSIfNew(fiveMinuteWarnings, '5분전');
 
-      // 개별 텍스트 메시지 발송 (TTS 제외)
-      for (const boss of fiveMinuteWarnings) {
+      // 개별 텍스트 메시지 발송 (TTS 제외) - API 레이트 리밋 방지를 위한 지연 추가
+      for (let i = 0; i < fiveMinuteWarnings.length; i++) {
+        const boss = fiveMinuteWarnings[i];
         const sent = await this.sendNotificationIfNew(boss.bossName, boss.nextRegen, '5분전', true);
         if (sent) notificationCount++;
+
+        // 다음 알림까지 200ms 지연 (레이트 리밋 방지)
+        if (i < fiveMinuteWarnings.length - 1) {
+          await new Promise(resolve => setTimeout(resolve, 200));
+        }
       }
     }
 
@@ -178,10 +189,16 @@ class SchedulerService {
       // 통합 음성 알림 먼저 발송
       await this.sendMaintenanceTTSIfNew(oneMinuteWarnings, '1분전');
 
-      // 개별 텍스트 메시지 발송 (TTS 제외)
-      for (const boss of oneMinuteWarnings) {
+      // 개별 텍스트 메시지 발송 (TTS 제외) - API 레이트 리밋 방지를 위한 지연 추가
+      for (let i = 0; i < oneMinuteWarnings.length; i++) {
+        const boss = oneMinuteWarnings[i];
         const sent = await this.sendNotificationIfNew(boss.bossName, boss.nextRegen, '1분전', true);
         if (sent) notificationCount++;
+
+        // 다음 알림까지 200ms 지연 (레이트 리밋 방지)
+        if (i < oneMinuteWarnings.length - 1) {
+          await new Promise(resolve => setTimeout(resolve, 200));
+        }
       }
     }
 

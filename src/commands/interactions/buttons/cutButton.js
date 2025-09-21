@@ -12,12 +12,9 @@ module.exports = {
   async execute(interaction) {
     try {
       const startTime = Date.now();
-      console.log(`[컷버튼] 버튼 클릭 - 사용자: ${interaction.user.username}`);
+      console.log(`[컷버튼] 버튼 클릭 - 사용자: ${interaction.user.username}, ID: ${interaction.id}`);
 
-      // 즉시 응답 (3초 제한 때문에)
-      await interaction.deferUpdate();
-
-      // custom_id에서 보스명 추출
+      // custom_id에서 보스명 추출 (먼저 검증)
       const match = interaction.customId.match(this.pattern);
       if (!match) {
         console.error('[컷버튼] 잘못된 custom_id:', interaction.customId);
@@ -25,12 +22,16 @@ module.exports = {
       }
 
       const [, bossName, timestamp] = match;
-      console.log(`[컷버튼] 보스: ${bossName}, 타임스탬프: ${timestamp}`);
+      const buttonTime = new Date(parseInt(timestamp));
+      const currentTime = new Date();
+      const timeDiff = (currentTime.getTime() - parseInt(timestamp)) / 1000;
+      console.log(`[컷버튼] 보스: ${bossName}, 버튼생성: ${buttonTime.toLocaleString()}, 현재: ${currentTime.toLocaleString()}, 차이: ${timeDiff.toFixed(1)}초`);
+
+      // === 핵심 비즈니스 로직 (인터랙션과 무관하게 반드시 실행) ===
 
       // 현재 시간으로 컷타임 설정
       const now = new Date();
       const cutTimeString = this.formatDateTime(now);
-      
       console.log(`[컷버튼] 컷타임 등록 시작: ${cutTimeString}`);
 
       // 보스 컷타임 업데이트
@@ -38,7 +39,7 @@ module.exports = {
       await bossService.updateBoss(bossName, { cutTime: cutTimeString });
       console.log(`[컷버튼] 컷타임 업데이트 완료: ${Date.now() - updateStart}ms`);
 
-      // 점검 모드 자동 해제 체크
+      // 점검 모드 자동 해제 체크 (반드시 실행)
       let maintenanceDeactivated = false;
       const isMaintenanceActive = await maintenanceService.isMaintenanceModeActive();
       if (isMaintenanceActive) {
@@ -49,6 +50,28 @@ module.exports = {
         } catch (error) {
           console.error('[컷버튼] 점검 모드 해제 실패:', error);
         }
+      }
+
+      // === 인터랙션 응답 처리 (실패해도 위 로직은 이미 완료됨) ===
+
+      console.log(`[컷버튼] 인터랙션 상태 - replied: ${interaction.replied}, deferred: ${interaction.deferred}`);
+
+      // 인터랙션이 이미 응답되었는지 확인
+      if (interaction.replied || interaction.deferred) {
+        console.log('[컷버튼] 인터랙션이 이미 처리됨, 비즈니스 로직은 완료됨');
+        return;
+      }
+
+      // 즉시 응답 시도 (실패해도 비즈니스 로직은 이미 완료됨)
+      try {
+        await interaction.deferUpdate();
+      } catch (deferError) {
+        if (deferError.code === 40060) {
+          console.log('[컷버튼] 인터랙션이 이미 acknowledged됨, 비즈니스 로직은 완료됨');
+          return;
+        }
+        console.warn('[컷버튼] deferUpdate 실패하지만 비즈니스 로직은 완료됨:', deferError.message);
+        return;
       }
 
       // 메시지를 참여 버튼으로 변경
@@ -89,15 +112,23 @@ module.exports = {
       console.error(`❌ [컷버튼] 오류 발생:`, error);
 
       try {
-        // 에러 발생 시 사용자에게 알림 (ephemeral)
-        const errorContent = error.message.includes('존재하지 않는 보스') 
-          ? '❌ 존재하지 않는 보스입니다.'
-          : '❌ 컷타임 등록 중 오류가 발생했습니다.';
+        // 인터랙션이 응답되지 않은 경우에만 에러 메시지 전송
+        if (!interaction.replied && !interaction.deferred) {
+          await interaction.reply({
+            content: '❌ 컷타임 등록 중 오류가 발생했습니다.',
+            ephemeral: true
+          });
+        } else {
+          // 이미 응답된 경우 followUp 시도
+          const errorContent = error.message.includes('존재하지 않는 보스')
+            ? '❌ 존재하지 않는 보스입니다.'
+            : '❌ 컷타임 등록 중 오류가 발생했습니다.';
 
-        await interaction.followUp({
-          content: errorContent,
-          ephemeral: true
-        });
+          await interaction.followUp({
+            content: errorContent,
+            ephemeral: true
+          });
+        }
       } catch (followUpError) {
         console.error('[컷버튼] 에러 응답 실패:', followUpError);
       }

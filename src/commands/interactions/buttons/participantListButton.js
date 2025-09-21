@@ -12,10 +12,25 @@ module.exports = {
   async execute(interaction) {
     try {
       const startTime = Date.now();
-      console.log(`[참여자확인] 버튼 클릭 - 사용자: ${interaction.user.username}`);
+      console.log(`[참여자확인] 버튼 클릭 - 사용자: ${interaction.user.username}, ID: ${interaction.id}`);
+      console.log(`[참여자확인] 인터랙션 상태 - replied: ${interaction.replied}, deferred: ${interaction.deferred}`);
 
-      // 즉시 응답 (3초 제한 때문에)
-      await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+      // 인터랙션이 이미 응답되었는지 확인
+      if (interaction.replied || interaction.deferred) {
+        console.log('[참여자확인] 인터랙션이 이미 처리됨, 무시');
+        return;
+      }
+
+      // 즉시 응답 (3초 제한 때문에) - 동시성 이슈 대응
+      try {
+        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+      } catch (deferError) {
+        if (deferError.code === 40060) {
+          console.log('[참여자확인] 인터랙션이 이미 acknowledged됨, 무시');
+          return;
+        }
+        throw deferError;
+      }
 
       // custom_id에서 보스명과 타임스탬프 추출
       const match = interaction.customId.match(this.pattern);

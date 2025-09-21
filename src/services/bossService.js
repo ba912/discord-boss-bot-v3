@@ -14,8 +14,8 @@ const validateBossData = (bossData) => {
   }
   
   // 점수 검증
-  if (!score || isNaN(score) || score < 1 || score > 100) {
-    throw new Error('점수는 1-100 사이의 숫자로 입력해주세요.');
+  if (score === undefined || score === null || isNaN(score) || score < 0 || score > 100) {
+    throw new Error('점수는 0-100 사이의 숫자로 입력해주세요.');
   }
   
   // 리젠타입 검증

@@ -41,9 +41,9 @@ module.exports = {
       // 참여점수 입력
       const scoreInput = new TextInputBuilder()
         .setCustomId('boss_score')
-        .setLabel('참여점수 (1-100)')
+        .setLabel('참여점수 (0-100)')
         .setStyle(TextInputStyle.Short)
-        .setPlaceholder('예: 15')
+        .setPlaceholder('예: 15 (0점도 가능)')
         .setRequired(true);
 
       // 리젠타입 입력 (개선된 안내)
@@ -247,17 +247,27 @@ module.exports = {
 
     } catch (error) {
       console.error('[보스 등록 모달] 오류:', error);
-      
-      // 간단한 실패 응답
-      if (!interaction.replied && !interaction.deferred) {
-        await interaction.reply({
-          content: '❌ 보스 등록 실패',
-          flags: MessageFlags.Ephemeral
-        });
-      } else {
-        await interaction.editReply({
-          content: '❌ 보스 등록 실패'
-        });
+
+      // 상세한 오류 메시지
+      const errorMessage = error.message.includes('보스') ?
+        `❌ ${error.message}` :
+        '❌ 보스 등록 중 오류가 발생했습니다.';
+
+      // 안전한 응답 처리
+      try {
+        if (!interaction.replied && !interaction.deferred) {
+          await interaction.reply({
+            content: errorMessage,
+            flags: MessageFlags.Ephemeral
+          });
+        } else {
+          await interaction.editReply({
+            content: errorMessage
+          });
+        }
+      } catch (replyError) {
+        console.error('[보스 등록 모달] 응답 오류:', replyError);
+        // 이미 응답된 경우 추가 처리하지 않음
       }
     }
   }

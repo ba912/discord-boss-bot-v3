@@ -36,7 +36,7 @@ module.exports = {
       // 참여점수 입력
       const scoreInput = new TextInputBuilder()
         .setCustomId('boss_score')
-        .setLabel('참여점수 (1-100)')
+        .setLabel('참여점수 (0-100)')
         .setStyle(TextInputStyle.Short)
         .setPlaceholder('예: 15')
         .setRequired(true);
@@ -86,7 +86,7 @@ module.exports = {
       await processingMessage.edit({
         content: '📋 **보스 등록 안내** (개선된 입력 방식)\n\n' +
                 '**1. 보스명:** 등록할 보스의 이름\n' +
-                '**2. 참여점수:** 1-100점 사이의 숫자\n' +
+                '**2. 참여점수:** 0-100점 사이의 숫자\n' +
                 '**3. 리젠타입:** `1` (시간마다) 또는 `2` (특정요일)\n' +
                 '**4. 리젠설정:**\n' +
                 '   • 시간마다 선택시: `3` (숫자만 입력, 3시간마다)\n' +

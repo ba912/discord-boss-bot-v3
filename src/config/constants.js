@@ -196,7 +196,7 @@ const MESSAGES = {
     ALREADY_PARTICIPATED: '❌ 이미 참여하셨습니다.',
     SYSTEM_ERROR: '❌ 시스템 오류가 발생했습니다. 관리자에게 문의해주세요.',
     INVALID_BOSS_NAME: '❌ 보스명을 올바르게 입력해주세요.',
-    INVALID_SCORE: '❌ 점수는 1-100 사이의 숫자로 입력해주세요.',
+    INVALID_SCORE: '❌ 점수는 0-100 사이의 숫자로 입력해주세요.',
     INVALID_REGEN_TYPE: '❌ 리젠타입은 "시간마다" 또는 "특정요일"만 가능합니다.',
     INVALID_VISIBILITY: '❌ 스케줄노출여부는 "노출" 또는 "비노출"만 가능합니다.',
   },

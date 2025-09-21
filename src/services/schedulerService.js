@@ -1,6 +1,7 @@
 const cron = require('node-cron');
 const { bossScheduleService } = require('./bossScheduleService');
 const { voiceChannelService } = require('./voiceChannelService');
+const maintenanceService = require('./maintenanceService');
 
 /**
  * 보스 알림 스케줄러 서비스
@@ -91,7 +92,7 @@ class SchedulerService {
 
       // 보스 스케줄 목록 조회
       const result = await bossScheduleService.getBossSchedules();
-      
+
       if (!result.success || !result.schedules) {
         console.log('[스케줄러] 조회할 보스 스케줄이 없습니다.');
         return;
@@ -100,11 +101,19 @@ class SchedulerService {
       const currentTime = new Date();
       let notificationCount = 0;
 
-      // 각 보스에 대해 알림 체크
-      for (const schedule of result.schedules) {
-        if (schedule.schedule.hasSchedule) {
-          const notified = await this.checkAndSendNotification(schedule, currentTime);
-          if (notified) notificationCount++;
+      // 점검 모드 확인
+      const isMaintenanceMode = await maintenanceService.isMaintenanceModeActive();
+
+      if (isMaintenanceMode) {
+        // 점검 모드: 개별 텍스트 + 통합 음성 알림 처리
+        notificationCount = await this.handleMaintenanceModeNotifications(result.schedules, currentTime);
+      } else {
+        // 일반 모드: 개별 보스 알림 처리
+        for (const schedule of result.schedules) {
+          if (schedule.schedule.hasSchedule) {
+            const notified = await this.checkAndSendNotification(schedule, currentTime);
+            if (notified) notificationCount++;
+          }
         }
       }
 
@@ -117,6 +126,105 @@ class SchedulerService {
 
     } catch (error) {
       console.error('[스케줄러] 오류 발생:', error);
+    }
+  }
+
+  /**
+   * 점검 모드에서 개별 텍스트 + 통합 음성 알림 처리
+   * @param {Array} schedules - 보스 스케줄 목록
+   * @param {Date} currentTime - 현재 시간
+   * @returns {number} 발송된 알림 수
+   */
+  async handleMaintenanceModeNotifications(schedules, currentTime) {
+    let notificationCount = 0;
+
+    // 5분전 및 1분전 알림이 필요한 보스들 수집
+    const fiveMinuteWarnings = [];
+    const oneMinuteWarnings = [];
+
+    for (const schedule of schedules) {
+      if (!schedule.schedule.hasSchedule) continue;
+
+      const { bossName, schedule: bossSchedule } = schedule;
+      const { nextRegen, remainingMs } = bossSchedule;
+
+      if (!nextRegen || remainingMs <= 0) continue;
+
+      // 5분전 알림 체크 (4.5분 ~ 5.5분 범위)
+      if (remainingMs >= 270000 && remainingMs <= 330000) {
+        fiveMinuteWarnings.push({ bossName, nextRegen });
+      }
+
+      // 1분전 알림 체크 (0.5분 ~ 1.5분 범위)
+      if (remainingMs >= 30000 && remainingMs <= 90000) {
+        oneMinuteWarnings.push({ bossName, nextRegen });
+      }
+    }
+
+    // 5분전 알림 처리
+    if (fiveMinuteWarnings.length > 0) {
+      // 통합 음성 알림 먼저 발송
+      await this.sendMaintenanceTTSIfNew(fiveMinuteWarnings, '5분전');
+
+      // 개별 텍스트 메시지 발송 (TTS 제외)
+      for (const boss of fiveMinuteWarnings) {
+        const sent = await this.sendNotificationIfNew(boss.bossName, boss.nextRegen, '5분전', true);
+        if (sent) notificationCount++;
+      }
+    }
+
+    // 1분전 알림 처리
+    if (oneMinuteWarnings.length > 0) {
+      // 통합 음성 알림 먼저 발송
+      await this.sendMaintenanceTTSIfNew(oneMinuteWarnings, '1분전');
+
+      // 개별 텍스트 메시지 발송 (TTS 제외)
+      for (const boss of oneMinuteWarnings) {
+        const sent = await this.sendNotificationIfNew(boss.bossName, boss.nextRegen, '1분전', true);
+        if (sent) notificationCount++;
+      }
+    }
+
+    return notificationCount;
+  }
+
+  /**
+   * 점검 모드에서 통합 TTS 알림의 중복 방지 및 발송
+   * @param {Array} bossList - 알림 대상 보스 목록
+   * @param {string} notificationType - 알림 타입 ('5분전' | '1분전')
+   */
+  async sendMaintenanceTTSIfNew(bossList, notificationType) {
+    // 캐시 키 생성 (점검모드_TTS_알림타입_가장빠른리젠시간)
+    const earliestRegenTime = Math.min(...bossList.map(b => b.nextRegen.getTime()));
+    const cacheKey = `maintenance_tts_${notificationType}_${earliestRegenTime}`;
+
+    // 이미 발송한 알림인지 확인
+    if (this.notificationCache.has(cacheKey)) {
+      return;
+    }
+
+    try {
+      let ttsTemplate = null;
+
+      if (notificationType === '5분전') {
+        ttsTemplate = 'maintenanceMode5Min';
+      } else if (notificationType === '1분전') {
+        ttsTemplate = 'maintenanceMode1Min';
+      }
+
+      // TTS 음성 알림 발송 (비동기로 처리)
+      if (this.ttsEnabled && ttsTemplate) {
+        this.sendTTSNotification('보스런', ttsTemplate).catch(error => {
+          console.warn(`[스케줄러] 점검 모드 TTS 알림 실패 (보스런 ${notificationType}):`, error.message);
+        });
+
+        // 성공 시 캐시에 저장
+        this.notificationCache.set(cacheKey, new Date());
+        console.log(`[스케줄러] 점검 모드 TTS 통합 알림 발송: 보스런 ${notificationType} (${bossList.length}개 보스)`);
+      }
+
+    } catch (error) {
+      console.error(`[스케줄러] 점검 모드 TTS 알림 발송 실패 (보스런 ${notificationType}):`, error);
     }
   }
 
@@ -152,9 +260,10 @@ class SchedulerService {
    * @param {string} bossName - 보스명
    * @param {Date} regenTime - 리젠 시간
    * @param {string} notificationType - 알림 타입 ('5분전' | '1분전')
+   * @param {boolean} skipTTS - TTS 재생 건너뛰기 (점검 모드용)
    * @returns {boolean} 발송 성공 여부
    */
-  async sendNotificationIfNew(bossName, regenTime, notificationType) {
+  async sendNotificationIfNew(bossName, regenTime, notificationType, skipTTS = false) {
     // 캐시 키 생성 (보스명_리젠시간_알림타입)
     const regenTimeKey = regenTime.getTime().toString();
     const cacheKey = `${bossName}_${regenTimeKey}_${notificationType}`;
@@ -166,8 +275,8 @@ class SchedulerService {
 
     try {
       // 알림 메시지 발송
-      const success = await this.sendNotification(bossName, notificationType);
-      
+      const success = await this.sendNotification(bossName, notificationType, skipTTS);
+
       if (success) {
         // 성공 시 캐시에 저장
         this.notificationCache.set(cacheKey, new Date());
@@ -183,15 +292,16 @@ class SchedulerService {
   }
 
   /**
-   * Discord 채널로 알림 메시지 발송 (텍스트 + TTS)
+   * Discord 채널로 개별 보스 알림 메시지 발송
    * @param {string} bossName - 보스명
    * @param {string} notificationType - 알림 타입 ('5분전' | '1분전')
+   * @param {boolean} skipTTS - TTS 재생 건너뛰기 (점검 모드용)
    * @returns {boolean} 발송 성공 여부
    */
-  async sendNotification(bossName, notificationType) {
+  async sendNotification(bossName, notificationType, skipTTS = false) {
     try {
       const channel = await this.client.channels.fetch(this.notificationChannelId);
-      
+
       if (!channel) {
         console.error(`[스케줄러] 채널을 찾을 수 없습니다: ${this.notificationChannelId}`);
         return false;
@@ -201,16 +311,14 @@ class SchedulerService {
       let components = [];
       let ttsTemplate = null;
 
+      // 개별 보스 알림
       if (notificationType === '5분전') {
-        // 5분전: 단순 메시지 + TTS
         messageContent = `${bossName} 5분전`;
         ttsTemplate = 'boss5MinWarning';
-        
       } else if (notificationType === '1분전') {
-        // 1분전: 컷 버튼 포함 + TTS
         messageContent = `${bossName} 1분전`;
         ttsTemplate = 'boss1MinWarning';
-        
+
         components = [{
           type: 1, // ACTION_ROW
           components: [{
@@ -233,8 +341,8 @@ class SchedulerService {
       // 텍스트 메시지 발송
       await channel.send(messageOptions);
 
-      // TTS 음성 알림 발송 (비동기로 처리)
-      if (this.ttsEnabled && ttsTemplate) {
+      // TTS 음성 알림 발송 (점검 모드에서는 건너뛰기)
+      if (!skipTTS && this.ttsEnabled && ttsTemplate) {
         this.sendTTSNotification(bossName, ttsTemplate).catch(error => {
           console.warn(`[스케줄러] TTS 알림 실패 (${bossName} ${notificationType}):`, error.message);
         });

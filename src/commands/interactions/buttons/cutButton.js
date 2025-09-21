@@ -1,4 +1,5 @@
 const { bossService } = require('../../../services/bossService');
+const maintenanceService = require('../../../services/maintenanceService');
 
 /**
  * 컷 버튼 인터랙션 핸들러
@@ -37,8 +38,24 @@ module.exports = {
       await bossService.updateBoss(bossName, { cutTime: cutTimeString });
       console.log(`[컷버튼] 컷타임 업데이트 완료: ${Date.now() - updateStart}ms`);
 
+      // 점검 모드 자동 해제 체크
+      let maintenanceDeactivated = false;
+      const isMaintenanceActive = await maintenanceService.isMaintenanceModeActive();
+      if (isMaintenanceActive) {
+        try {
+          await maintenanceService.deactivateMaintenanceMode();
+          maintenanceDeactivated = true;
+          console.log(`[컷버튼] 점검 모드 자동 해제됨 - 첫 컷: ${bossName}`);
+        } catch (error) {
+          console.error('[컷버튼] 점검 모드 해제 실패:', error);
+        }
+      }
+
       // 메시지를 참여 버튼으로 변경
-      const newContent = `${bossName} 컷 완료`;
+      let newContent = `${bossName} 컷 완료`;
+      if (maintenanceDeactivated) {
+        newContent += '\n점검 모드가 해제되었습니다.';
+      }
       const newComponents = [{
         type: 1, // ACTION_ROW
         components: [

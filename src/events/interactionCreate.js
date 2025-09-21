@@ -8,6 +8,8 @@ module.exports = {
   
   async execute(interaction) {
     try {
+      console.log(`[이벤트] 인터랙션 수신 - 타입: ${interaction.type}, ID: ${interaction.id}, customId: ${interaction.customId || 'N/A'}`);
+
       // 모달 제출 인터랙션 처리
       if (interaction.isModalSubmit()) {
         if (interaction.customId.startsWith('boss_add_modal_')) {
@@ -26,14 +28,7 @@ module.exports = {
         
         
         // 새로운 버튼 핸들러 시스템
-        const handled = await module.exports.handleButtonInteraction(interaction);
-        if (!handled) {
-          console.warn(`버튼 핸들러를 찾을 수 없음: ${interaction.customId}`);
-          return await interaction.reply({
-            content: '❌ 알 수 없는 버튼입니다.',
-            flags: MessageFlags.Ephemeral
-          });
-        }
+        return await module.exports.handleButtonInteraction(interaction);
       }
       
       // 셀렉트 메뉴나 다른 인터랙션 타입 처리 (추후 확장 가능)
@@ -67,33 +62,51 @@ module.exports = {
   /**
    * 버튼 인터랙션 핸들러 찾기 및 실행
    * @param {ButtonInteraction} interaction - 버튼 인터랙션
-   * @returns {boolean} 핸들러가 실행되었는지 여부
    */
   async handleButtonInteraction(interaction) {
     try {
       // buttons 폴더에서 핸들러 찾기
       const buttonsPath = path.join(__dirname, '..', 'commands', 'interactions', 'buttons');
-      
+
       if (!fs.existsSync(buttonsPath)) {
-        return false;
+        console.warn(`버튼 핸들러를 찾을 수 없음: ${interaction.customId} (폴더 없음)`);
+        return await interaction.reply({
+          content: '❌ 알 수 없는 버튼입니다.',
+          flags: MessageFlags.Ephemeral
+        });
       }
 
       const buttonFiles = fs.readdirSync(buttonsPath).filter(file => file.endsWith('.js'));
-      
+
       for (const file of buttonFiles) {
         const buttonHandler = require(path.join(buttonsPath, file));
-        
+
         // 패턴 매칭 방식으로 핸들러 찾기
         if (buttonHandler.pattern && buttonHandler.pattern.test(interaction.customId)) {
-          await buttonHandler.execute(interaction);
-          return true;
+          return await buttonHandler.execute(interaction);
         }
       }
-      
-      return false;
+
+      // 핸들러를 찾지 못한 경우
+      console.warn(`버튼 핸들러를 찾을 수 없음: ${interaction.customId}`);
+      return await interaction.reply({
+        content: '❌ 알 수 없는 버튼입니다.',
+        flags: MessageFlags.Ephemeral
+      });
+
     } catch (error) {
       console.error('버튼 핸들러 실행 중 오류:', error);
-      return false;
+      // 에러 시에도 사용자에게 응답
+      try {
+        if (!interaction.replied && !interaction.deferred) {
+          await interaction.reply({
+            content: '❌ 버튼 처리 중 오류가 발생했습니다.',
+            flags: MessageFlags.Ephemeral
+          });
+        }
+      } catch (replyError) {
+        console.error('버튼 핸들러 에러 응답 실패:', replyError);
+      }
     }
   }
 };
